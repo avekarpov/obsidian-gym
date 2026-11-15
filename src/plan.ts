@@ -73,7 +73,7 @@ export class PlanBlock extends MarkdownRenderChild {
         root.createEl("h2", { text: scheme.name });
         const table = horizontalScroll(root).createEl("table");
         const head = table.createEl("thead").createEl("tr");
-        for (const title of ["Exercise", "Sets", "Reps", "Weight"]) head.createEl("th", { text: title });
+        for (const title of ["Exercise", "Sets", "Reps", "Weight (kg)"]) head.createEl("th", { text: title });
         const body = table.createEl("tbody");
         for (const id of scheme.exercises) {
           const exercise = exercises.get(id);
@@ -116,7 +116,7 @@ export class PlanBlock extends MarkdownRenderChild {
     this.renderName(tr.createEl("td"), exercise);
     tr.createEl("td", { cls: "gym-num", text: String(exercise.sets) });
     tr.createEl("td", { cls: "gym-num", text: exercise.reps === null ? "—" : String(exercise.reps) });
-    tr.createEl("td", { cls: "gym-num", text: exercise.weightG === null ? "—" : weightText(exercise.weightG, exercise) });
+    tr.createEl("td", { cls: "gym-num", text: exercise.weightG === null ? "—" : formatKg(exercise.weightG) });
   }
 
   private renderEditor(body: HTMLElement, db: LightDb, scheme: Scheme, exercise: Exercise, draft: Draft): void {
@@ -136,7 +136,7 @@ export class PlanBlock extends MarkdownRenderChild {
     };
     sideField.createSpan({ text: "Weight per side (dumbbells, one arm or leg)" });
     const fields = cell.createDiv({ cls: "gym-plan-fields" });
-    this.planFields(fields, draft, draft.perSide);
+    this.planFields(fields, draft);
 
     const actions = cell.createDiv({ cls: "gym-plan-actions" });
     const index = scheme.exercises.indexOf(exercise.id);
@@ -210,13 +210,13 @@ export class PlanBlock extends MarkdownRenderChild {
       };
       sideField.createSpan({ text: "Weight per side (dumbbells, one arm or leg)" });
 
-      this.planFields(box.createDiv({ cls: "gym-plan-fields" }), form, form.perSide);
+      this.planFields(box.createDiv({ cls: "gym-plan-fields" }), form);
     } else {
       const existing = exercises.get(form.existingId);
       if (existing) {
         box.createDiv({
           cls: "gym-muted",
-          text: `${existing.sets} × ${existing.reps ?? "—"} · ${existing.weightG === null ? "—" : weightText(existing.weightG, existing)}. Edit the plan after adding.`,
+          text: `${existing.sets} × ${existing.reps ?? "—"} · ${existing.weightG === null ? "—" : `${formatKg(existing.weightG)} kg`}. Edit the plan after adding.`,
         });
       }
     }
@@ -256,7 +256,7 @@ export class PlanBlock extends MarkdownRenderChild {
     };
   }
 
-  private planFields(fields: HTMLElement, draft: { sets: string; reps: string; weight: { grams: number } }, perSide: boolean): void {
+  private planFields(fields: HTMLElement, draft: { sets: string; reps: string; weight: { grams: number } }): void {
     const number = (label: string, value: string, set: (v: string) => void) => {
       const field = fields.createEl("label", { cls: "gym-plan-field" });
       field.createSpan({ text: label });
@@ -268,9 +268,9 @@ export class PlanBlock extends MarkdownRenderChild {
     number("Reps", draft.reps, (v) => (draft.reps = v));
 
     const field = fields.createDiv({ cls: "gym-plan-field" });
-    field.createSpan({ text: "Weight" });
+    field.createSpan({ text: "Weight (kg)" });
     const value = field.createDiv({ cls: "gym-plan-weight" });
-    const show = () => value.setText(`${formatKg(draft.weight.grams)} kg${perSide ? " ×2" : ""}`);
+    const show = () => value.setText(formatKg(draft.weight.grams));
     show();
     bindWeightDrag(value, draft.weight, show, {
       onStart: () => (this.dragging = true),
@@ -340,8 +340,4 @@ function parsePlan(draft: { sets: string; reps: string; weight: { grams: number 
 function nextPosition(db: LightDb, schemeId: string): number {
   const row = db.all("SELECT coalesce(max(position), 0) AS p FROM scheme_exercises WHERE scheme_id = ?", [schemeId])[0];
   return (row.p as number) + 1;
-}
-
-function weightText(grams: number, exercise: Exercise): string {
-  return `${formatKg(grams)} kg${exercise.perSide ? " ×2" : ""}`;
 }
