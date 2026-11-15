@@ -115,7 +115,7 @@ export function stepKey(step: Step): string {
 
 export function defaultWeightG(db: LightDb, step: Step): number {
   const last = (kind: SetKind) =>
-    db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = ? ORDER BY done_at DESC LIMIT 1", [step.exercise.id, kind])[0]
+    db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = ? AND skipped = 0 ORDER BY done_at DESC LIMIT 1", [step.exercise.id, kind])[0]
       ?.weight_g as number | undefined;
   const work = last("work") ?? step.exercise.startWeightG ?? 0;
   if (step.kind === "work") return work;
@@ -123,10 +123,10 @@ export function defaultWeightG(db: LightDb, step: Step): number {
 }
 
 export function lastWorkWeightG(db: LightDb, exercise: Exercise): number | null {
-  const last = db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = 'work' ORDER BY done_at DESC LIMIT 1", [exercise.id])[0];
+  const last = db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = 'work' AND skipped = 0 ORDER BY done_at DESC LIMIT 1", [exercise.id])[0];
   return (last?.weight_g as number | undefined) ?? exercise.startWeightG;
 }
 
 export function workSetCount(db: LightDb, workoutId: string): number {
-  return db.all("SELECT count(*) AS n FROM sets WHERE workout_id = ? AND kind = 'work'", [workoutId])[0].n as number;
+  return db.all("SELECT count(*) AS n FROM sets WHERE workout_id = ? AND kind = 'work' AND skipped = 0", [workoutId])[0].n as number;
 }

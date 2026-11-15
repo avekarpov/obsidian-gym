@@ -74,6 +74,7 @@ export const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "001_schema", sql: SCHEMA },
   { id: "002_seed", sql: seed() },
   { id: "003_schemes", sql: schemes() },
+  { id: "004_skipped_sets", sql: "ALTER TABLE sets ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0;" },
 ];
 
 export async function openGymDb(app: App): Promise<LightDb> {

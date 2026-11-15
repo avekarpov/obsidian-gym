@@ -54,7 +54,7 @@ export class LogBlock extends MarkdownRenderChild {
   private renderProgress(root: HTMLElement, db: LightDb, exercises: Map<string, Exercise>): void {
     const points = new Map<string, Point[]>();
     for (const r of db.all(`SELECT exercise_id, max(weight_g) AS grams, min(done_at) AS at
-      FROM sets WHERE kind = 'work' GROUP BY exercise_id, workout_id ORDER BY at`)) {
+      FROM sets WHERE kind = 'work' AND skipped = 0 GROUP BY exercise_id, workout_id ORDER BY at`)) {
       const list = points.get(r.exercise_id as string) ?? [];
       list.push({ at: r.at as string, grams: r.grams as number });
       points.set(r.exercise_id as string, list);
@@ -150,7 +150,7 @@ export class LogBlock extends MarkdownRenderChild {
         : "in progress";
       details.createEl("summary", { text: `${formatDate(w.started_at as string)} · ${names} · ${duration}` });
 
-      const sets = db.all("SELECT exercise_id, kind, weight_g FROM sets WHERE workout_id = ? ORDER BY done_at", [id]);
+      const sets = db.all("SELECT exercise_id, kind, weight_g FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [id]);
       if (!sets.length) {
         details.createDiv({ cls: "gym-muted", text: "No sets" });
         continue;

@@ -147,20 +147,29 @@ export class GymBlock extends MarkdownRenderChild {
     this.bindDrag(value, weight, showWeight);
 
     const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
-    doneButton.onclick = () => this.run(async (db) => {
-      const last = index === steps.length - 1;
+    const record = (toRecord: Step[], skipped: boolean) => this.run(async (db) => {
+      const recorded = new Set(toRecord.map(stepKey));
+      const finished = steps.every((s) => done.has(stepKey(s)) || recorded.has(stepKey(s)));
       const now = new Date().toISOString();
       await db.transaction([
-        {
-          op: "put", table: "sets", row: crypto.randomUUID(), fields: {
-            workout_id: workoutId, exercise_id: step.exercise.id, set_no: step.setNo,
-            kind: step.kind, weight_g: weight.grams, done_at: now,
+        ...toRecord.map((s) => ({
+          op: "put" as const, table: "sets", row: crypto.randomUUID(), fields: {
+            workout_id: workoutId, exercise_id: s.exercise.id, set_no: s.setNo,
+            kind: s.kind, weight_g: weight.grams, done_at: now, skipped: skipped ? 1 : 0,
           },
-        },
-        ...(last ? [{ op: "put" as const, table: "workouts", row: workoutId, fields: { finished_at: now } }] : []),
+        })),
+        ...(finished ? [{ op: "put" as const, table: "workouts", row: workoutId, fields: { finished_at: now } }] : []),
       ]);
-      if (last) this.mode = { kind: "finished", workoutId };
+      if (finished) this.mode = { kind: "finished", workoutId };
     });
+    doneButton.onclick = () => record([step], false);
+
+    const skips = root.createDiv({ cls: "gym-skips" });
+    skips.createEl("button", { text: "Skip set" }).onclick = () => record([step], true);
+    skips.createEl("button", { text: "Skip exercise" }).onclick = () => record(
+      steps.filter((s) => s.exercise.id === step.exercise.id && !done.has(stepKey(s))),
+      true,
+    );
 
     const next = steps[index + 1];
     if (next) {
