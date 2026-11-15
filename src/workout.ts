@@ -1,17 +1,13 @@
-import { LightDb } from "./lightdb";
-
-export type SetKind = "warmup" | "work";
+import { LightDb, OpInput } from "./lightdb";
 
 export interface Exercise {
   id: string;
   name: string;
   note: string | null;
   perSide: boolean;
-  warmupSets: number;
-  workSets: number;
-  repsMin: number | null;
-  repsMax: number | null;
-  startWeightG: number | null;
+  sets: number;
+  reps: number | null;
+  weightG: number | null;
 }
 
 export interface Scheme {
@@ -24,8 +20,6 @@ export interface Step {
   exercise: Exercise;
   scheme: Scheme;
   setNo: number;
-  setCount: number;
-  kind: SetKind;
   exerciseIndex: number;
   exerciseCount: number;
 }
@@ -37,19 +31,23 @@ export interface Workout {
   finishedAt: string | null;
 }
 
+export interface RecordedSet {
+  exerciseId: string;
+  grams: number;
+  skipped: boolean;
+}
+
 export function loadExercises(db: LightDb): Map<string, Exercise> {
-  const rows = db.all(`SELECT e.id, e.name, e.note, e.per_side, p.warmup_sets, p.work_sets, p.reps_min, p.reps_max, p.start_weight_g
+  const rows = db.all(`SELECT e.id, e.name, e.note, e.per_side, p.sets, p.reps, p.weight_g
     FROM exercises e JOIN plan p ON p.id = e.id`);
   return new Map(rows.map((r) => [r.id as string, {
     id: r.id as string,
     name: r.name as string,
     note: r.note as string | null,
     perSide: r.per_side === 1,
-    warmupSets: r.warmup_sets as number,
-    workSets: r.work_sets as number,
-    repsMin: r.reps_min as number | null,
-    repsMax: r.reps_max as number | null,
-    startWeightG: r.start_weight_g as number | null,
+    sets: r.sets as number,
+    reps: r.reps as number | null,
+    weightG: r.weight_g as number | null,
   }]));
 }
 
@@ -87,18 +85,8 @@ export function buildSteps(exercises: Map<string, Exercise>, schemes: Scheme[], 
     s.exercises.map((id) => ({ scheme: s, exercise: exercises.get(id) })).filter((e) => e.exercise));
   const steps: Step[] = [];
   ordered.forEach(({ scheme, exercise }, exerciseIndex) => {
-    const ex = exercise!;
-    const setCount = ex.warmupSets + ex.workSets;
-    for (let setNo = 1; setNo <= setCount; setNo++) {
-      steps.push({
-        exercise: ex,
-        scheme,
-        setNo,
-        setCount,
-        kind: setNo <= ex.warmupSets ? "warmup" : "work",
-        exerciseIndex,
-        exerciseCount: ordered.length,
-      });
+    for (let setNo = 1; setNo <= exercise!.sets; setNo++) {
+      steps.push({ exercise: exercise!, scheme, setNo, exerciseIndex, exerciseCount: ordered.length });
     }
   });
   return steps;
@@ -113,20 +101,23 @@ export function stepKey(step: Step): string {
   return `${step.exercise.id}:${step.setNo}`;
 }
 
-export function defaultWeightG(db: LightDb, step: Step): number {
-  const last = (kind: SetKind) =>
-    db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = ? AND skipped = 0 ORDER BY done_at DESC LIMIT 1", [step.exercise.id, kind])[0]
-      ?.weight_g as number | undefined;
-  const work = last("work") ?? step.exercise.startWeightG ?? 0;
-  if (step.kind === "work") return work;
-  return last("warmup") ?? Math.round(work / 2 / 1000) * 1000;
+export function defaultWeightG(db: LightDb, workoutId: string, exercise: Exercise): number {
+  const last = db.all(
+    "SELECT weight_g FROM sets WHERE workout_id = ? AND exercise_id = ? AND skipped = 0 ORDER BY done_at DESC LIMIT 1",
+    [workoutId, exercise.id],
+  )[0];
+  return (last?.weight_g as number | undefined) ?? exercise.weightG ?? 0;
 }
 
-export function lastWorkWeightG(db: LightDb, exercise: Exercise): number | null {
-  const last = db.all("SELECT weight_g FROM sets WHERE exercise_id = ? AND kind = 'work' AND skipped = 0 ORDER BY done_at DESC LIMIT 1", [exercise.id])[0];
-  return (last?.weight_g as number | undefined) ?? exercise.startWeightG;
+export function planWeightUpdates(db: LightDb, workoutId: string, pending: RecordedSet[]): OpInput[] {
+  const last = new Map<string, number>();
+  for (const r of db.all("SELECT exercise_id, weight_g FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [workoutId])) {
+    last.set(r.exercise_id as string, r.weight_g as number);
+  }
+  for (const set of pending) if (!set.skipped) last.set(set.exerciseId, set.grams);
+  return [...last].map(([exerciseId, grams]) => ({ op: "put", table: "plan", row: exerciseId, fields: { weight_g: grams } }));
 }
 
 export function workSetCount(db: LightDb, workoutId: string): number {
-  return db.all("SELECT count(*) AS n FROM sets WHERE workout_id = ? AND kind = 'work' AND skipped = 0", [workoutId])[0].n as number;
+  return db.all("SELECT count(*) AS n FROM sets WHERE workout_id = ? AND skipped = 0", [workoutId])[0].n as number;
 }

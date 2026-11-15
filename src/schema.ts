@@ -75,6 +75,25 @@ export const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "002_seed", sql: seed() },
   { id: "003_schemes", sql: schemes() },
   { id: "004_skipped_sets", sql: "ALTER TABLE sets ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0;" },
+  {
+    id: "005_plan_simple",
+    sql: `ALTER TABLE plan ADD COLUMN sets INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE plan ADD COLUMN reps INTEGER;
+ALTER TABLE plan ADD COLUMN weight_g INTEGER;
+UPDATE plan SET
+  sets = work_sets,
+  reps = coalesce(reps_max, reps_min),
+  weight_g = coalesce(
+    (SELECT s.weight_g FROM sets AS s
+      WHERE s.exercise_id = plan.id AND s.kind = 'work' AND s.skipped = 0
+      ORDER BY s.done_at DESC LIMIT 1),
+    start_weight_g);
+ALTER TABLE plan DROP COLUMN warmup_sets;
+ALTER TABLE plan DROP COLUMN work_sets;
+ALTER TABLE plan DROP COLUMN reps_min;
+ALTER TABLE plan DROP COLUMN reps_max;
+ALTER TABLE plan DROP COLUMN start_weight_g;`,
+  },
 ];
 
 export async function openGymDb(app: App): Promise<LightDb> {
