@@ -387,3 +387,13 @@
 .gym-plan .gym-muted {
   color: var(--text-muted);
 }
+
+.gym-plan .gym-plan-edit .gym-plan-field,
+.gym-plan .gym-plan-edit .gym-plan-check {
+  margin-bottom: var(--size-4-2);
+}
+
+.gym-plan .gym-plan-name {
+  width: 100%;
+  font-size: var(--font-ui-medium);
+}

@@ -9,6 +9,8 @@ import { Exercise, loadExercises, loadSchemes, Scheme } from "./workout";
 interface Draft {
   schemeId: string;
   exerciseId: string;
+  name: string;
+  perSide: boolean;
   sets: string;
   reps: string;
   weight: { grams: number };
@@ -102,6 +104,8 @@ export class PlanBlock extends MarkdownRenderChild {
       this.draft = {
         schemeId: scheme.id,
         exerciseId: exercise.id,
+        name: exercise.name,
+        perSide: exercise.perSide,
         sets: String(exercise.sets),
         reps: exercise.reps === null ? "" : String(exercise.reps),
         weight: { grams: exercise.weightG ?? 0 },
@@ -117,8 +121,21 @@ export class PlanBlock extends MarkdownRenderChild {
   private renderEditor(body: HTMLElement, db: LightDb, scheme: Scheme, exercise: Exercise, draft: Draft): void {
     const cell = body.createEl("tr", { cls: "gym-plan-edit" }).createEl("td", { attr: { colspan: "4" } });
     this.renderName(cell.createDiv({ cls: "gym-plan-edit-name" }), exercise);
+    const nameField = cell.createEl("label", { cls: "gym-plan-field" });
+    nameField.createSpan({ text: "Name" });
+    const name = nameField.createEl("input", { cls: "gym-plan-name", type: "text" });
+    name.value = draft.name;
+    name.oninput = () => (draft.name = name.value);
+    const sideField = cell.createEl("label", { cls: "gym-plan-check" });
+    const side = sideField.createEl("input", { type: "checkbox" });
+    side.checked = draft.perSide;
+    side.onchange = () => {
+      draft.perSide = side.checked;
+      this.render();
+    };
+    sideField.createSpan({ text: "Weight per side (dumbbells, one arm or leg)" });
     const fields = cell.createDiv({ cls: "gym-plan-fields" });
-    this.planFields(fields, draft, exercise.perSide);
+    this.planFields(fields, draft, draft.perSide);
 
     const actions = cell.createDiv({ cls: "gym-plan-actions" });
     const index = scheme.exercises.indexOf(exercise.id);
@@ -143,8 +160,16 @@ export class PlanBlock extends MarkdownRenderChild {
     actions.createEl("button", { cls: "gym-primary", text: "Save" }).onclick = () => {
       const plan = parsePlan(draft);
       if (!plan) return;
+      const newName = draft.name.trim();
+      if (!newName) {
+        new Notice("Gym: enter a name");
+        return;
+      }
       void this.act(async () => {
-        await db.put("plan", draft.exerciseId, plan);
+        await db.transaction([
+          { op: "put", table: "exercises", row: draft.exerciseId, fields: { name: newName, per_side: draft.perSide ? 1 : 0 } },
+          { op: "put", table: "plan", row: draft.exerciseId, fields: plan },
+        ]);
         this.draft = null;
       });
     };
