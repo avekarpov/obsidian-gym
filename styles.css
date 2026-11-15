@@ -1,0 +1,140 @@
+.gym {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3) 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.gym button {
+  touch-action: manipulation;
+}
+
+.gym .gym-big {
+  height: 3.5em;
+  font-size: var(--font-ui-large);
+}
+
+.gym .gym-title {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+  text-align: center;
+}
+
+.gym .gym-schemes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.gym .gym-scheme {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-large);
+}
+
+.gym .gym-actions {
+  display: flex;
+  gap: var(--size-4-2);
+}
+
+.gym .gym-actions button {
+  flex: 1;
+  height: 3em;
+}
+
+.gym .gym-header {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.gym .gym-exercise {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+  text-align: center;
+}
+
+.gym .gym-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.gym .gym-set,
+.gym .gym-next {
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.gym .gym-weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-4-6);
+  margin: var(--size-4-4) 0;
+}
+
+.gym .gym-round {
+  width: 4em;
+  height: 4em;
+  border-radius: 50%;
+  font-size: 1.6em;
+}
+
+.gym .gym-weight {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 5em;
+}
+
+.gym .gym-weight-number {
+  font-size: 3.5em;
+  font-weight: var(--font-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.gym .gym-weight-unit {
+  color: var(--text-muted);
+}
+
+.gym .gym-slider {
+  width: 100%;
+}
+
+.gym .gym-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-top: calc(-1 * var(--size-4-2));
+}
+
+.gym .gym-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.gym .gym-primary:disabled {
+  opacity: 0.5;
+}
+
+.gym .gym-end {
+  align-self: center;
+  background: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.gym .gym-error {
+  color: var(--text-error);
+}

@@ -1,0 +1,9 @@
+{
+  "id": "gym",
+  "name": "Gym",
+  "version": "0.1.0",
+  "minAppVersion": "1.8.7",
+  "description": "Workout tracker stored in LightDB.",
+  "author": "avekarpov",
+  "isDesktopOnly": false
+}
