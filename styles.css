@@ -202,3 +202,67 @@
   right: auto;
   left: 60px;
 }
+
+.gym-log .gym-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.gym-log .gym-up {
+  color: var(--color-green);
+}
+
+.gym-log .gym-down {
+  color: var(--color-red);
+}
+
+.gym-log .gym-muted {
+  color: var(--text-faint);
+}
+
+.gym-log .gym-trend svg {
+  display: block;
+  overflow: visible;
+}
+
+.gym-log .gym-trend-line {
+  fill: none;
+  stroke: var(--interactive-accent);
+  stroke-width: 2;
+}
+
+.gym-log .gym-trend-dot {
+  fill: var(--interactive-accent);
+  cursor: pointer;
+}
+
+.gym-log .gym-trend-caption {
+  min-height: 1.2em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.gym-log .gym-workout {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2) var(--size-4-3);
+  margin-bottom: var(--size-4-2);
+}
+
+.gym-log .gym-workout summary {
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+}
+
+.gym-log .gym-workout-sets {
+  margin-top: var(--size-4-2);
+}
+
+.gym-log .gym-workout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-4-3);
+  padding: var(--size-2-1) 0;
+  border-top: 1px solid var(--background-modifier-border);
+}

@@ -1,4 +1,5 @@
 import { Notice, Plugin, TFile } from "obsidian";
+import { LogBlock } from "./log";
 import { PlanBlock } from "./plan";
 import { GymBlock } from "./view";
 
@@ -11,6 +12,9 @@ export default class GymPlugin extends Plugin {
     });
     this.registerMarkdownCodeBlockProcessor("gym-plan", (_source, el, ctx) => {
       ctx.addChild(new PlanBlock(el, this.app));
+    });
+    this.registerMarkdownCodeBlockProcessor("gym-log", (_source, el, ctx) => {
+      ctx.addChild(new LogBlock(el, this.app));
     });
     this.addRibbonIcon("dumbbell", "Gym: open workout", () => void this.openWorkout());
     this.addCommand({ id: "open-workout", name: "Open workout", callback: () => void this.openWorkout() });
