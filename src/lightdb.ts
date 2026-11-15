@@ -10,6 +10,7 @@ export type OpInput =
 export interface LightDb {
   all(sql: string, params?: Value[]): Record<string, unknown>[];
   put(table: string, row: string, fields: Record<string, Value>): Promise<string>;
+  delete(table: string, row: string): Promise<string>;
   migrate(id: string, sql: string): Promise<string | null>;
   transaction(ops: OpInput[]): Promise<string>;
   onChange(listener: () => void): () => void;

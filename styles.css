@@ -349,3 +349,41 @@
   background: var(--interactive-accent);
   color: var(--text-on-accent);
 }
+
+.gym-plan .gym-plan-add {
+  margin: var(--size-4-2) 0 var(--size-4-4);
+}
+
+.gym-plan .gym-plan-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3);
+  margin: var(--size-4-2) 0 var(--size-4-4);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.gym-plan .gym-plan-new input[type="text"] {
+  width: 100%;
+  font-size: var(--font-ui-medium);
+}
+
+.gym-plan .gym-plan-check {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.gym-plan .gym-plan-actions {
+  flex-wrap: wrap;
+}
+
+.gym-plan .gym-plan-spacer {
+  flex: 1;
+}
+
+.gym-plan .gym-muted {
+  color: var(--text-muted);
+}
