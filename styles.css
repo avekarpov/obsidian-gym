@@ -81,13 +81,6 @@
   margin: var(--size-4-4) 0;
 }
 
-.gym .gym-round {
-  width: 4em;
-  height: 4em;
-  border-radius: 50%;
-  font-size: 1.6em;
-}
-
 .gym .gym-weight {
   cursor: ns-resize;
   touch-action: none;
@@ -135,10 +128,6 @@
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.gym .gym-hold {
-  touch-action: none;
 }
 
 .gym-scale {

@@ -8,12 +8,10 @@ import {
   loadExercises, loadSchemes, Scheme, Step, stepKey, workSetCount,
 } from "./workout";
 
-const STEP_G = 1000;
 const DRAG_RANGE_G = 20000;
 const DRAG_STEP_G = 500;
 const DRAG_PX_PER_STEP = 8;
 const SCALE_LABEL_EVERY_G = 2500;
-const LONG_PRESS_MS = 350;
 
 type Mode = { kind: "idle" } | { kind: "choose"; chosen: Set<string> } | { kind: "finished"; workoutId: string };
 
@@ -139,18 +137,14 @@ export class GymBlock extends MarkdownRenderChild {
     root.createDiv({ cls: "gym-set", text: setLabel(step) });
 
     const row = root.createDiv({ cls: "gym-weight-row" });
-    const minus = row.createEl("button", { cls: "gym-round", text: "−" });
     const value = row.createDiv({ cls: "gym-weight" });
-    const plus = row.createEl("button", { cls: "gym-round", text: "+" });
     const showWeight = () => {
       value.empty();
       value.createSpan({ cls: "gym-weight-number", text: formatKg(weight.grams) });
       value.createSpan({ cls: "gym-weight-unit", text: step.exercise.perSide ? "kg per side" : "kg" });
     };
     showWeight();
-    this.bindHold(minus, weight, -STEP_G, showWeight, LONG_PRESS_MS);
-    this.bindHold(plus, weight, STEP_G, showWeight, LONG_PRESS_MS);
-    this.bindHold(value, weight, null, showWeight, 0);
+    this.bindDrag(value, weight, showWeight);
 
     const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
     doneButton.onclick = () => this.run(async (db) => {
@@ -200,16 +194,11 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private bindHold(
-    button: HTMLElement, weight: { grams: number }, delta: number | null, show: () => void, delayMs: number,
-  ): void {
+  private bindDrag(target: HTMLElement, weight: { grams: number }, show: () => void): void {
     let pointerId: number | null = null;
-    let timer: number | null = null;
     let drag: { startY: number; startG: number; update: (grams: number) => void } | null = null;
 
     const finish = () => {
-      if (timer !== null) window.clearTimeout(timer);
-      timer = null;
       drag = null;
       pointerId = null;
       this.closeScale();
@@ -220,24 +209,17 @@ export class GymBlock extends MarkdownRenderChild {
       }
     };
 
-    button.addClass("gym-hold");
-    button.onpointerdown = (event) => {
+    target.onpointerdown = (event) => {
       if (pointerId !== null) return;
       event.preventDefault();
       pointerId = event.pointerId;
-      button.setPointerCapture(event.pointerId);
+      target.setPointerCapture(event.pointerId);
       this.dragging = true;
-      const { clientX, clientY } = event;
-      const start = () => {
-        timer = null;
-        const startG = weight.grams;
-        drag = { startY: clientY, startG, update: this.openScale(clientX, clientY, startG) };
-        vibrate();
-      };
-      if (delayMs > 0) timer = window.setTimeout(start, delayMs);
-      else start();
+      const startG = weight.grams;
+      drag = { startY: event.clientY, startG, update: this.openScale(event.clientX, event.clientY, startG) };
+      vibrate();
     };
-    button.onpointermove = (event) => {
+    target.onpointermove = (event) => {
       if (event.pointerId !== pointerId || !drag) return;
       event.preventDefault();
       const steps = Math.round((drag.startY - event.clientY) / DRAG_PX_PER_STEP);
@@ -249,19 +231,13 @@ export class GymBlock extends MarkdownRenderChild {
       show();
       vibrate();
     };
-    button.onpointerup = (event) => {
-      if (event.pointerId !== pointerId) return;
-      const tap = timer !== null;
-      if (tap && delta !== null) {
-        weight.grams = Math.max(0, weight.grams + delta);
-        show();
-      }
-      finish();
-    };
-    button.onpointercancel = (event) => {
+    target.onpointerup = (event) => {
       if (event.pointerId === pointerId) finish();
     };
-    button.oncontextmenu = (event) => event.preventDefault();
+    target.onpointercancel = (event) => {
+      if (event.pointerId === pointerId) finish();
+    };
+    target.oncontextmenu = (event) => event.preventDefault();
   }
 
   private openScale(x: number, y: number, startG: number): (grams: number) => void {
