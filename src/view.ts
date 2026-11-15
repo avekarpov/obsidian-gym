@@ -9,9 +9,11 @@ import {
 } from "./workout";
 
 const STEP_G = 1000;
-const SLIDER_RANGE_G = 20000;
-const SLIDER_STEP_G = 500;
-const LONG_PRESS_MS = 450;
+const DRAG_RANGE_G = 20000;
+const DRAG_STEP_G = 500;
+const DRAG_PX_PER_STEP = 8;
+const SCALE_LABEL_EVERY_G = 2500;
+const LONG_PRESS_MS = 350;
 
 type Mode = { kind: "idle" } | { kind: "choose"; chosen: Set<string> } | { kind: "finished"; workoutId: string };
 
@@ -21,7 +23,9 @@ export class GymBlock extends MarkdownRenderChild {
   private schemes: Scheme[] = [];
   private mode: Mode = { kind: "idle" };
   private weight: { key: string; grams: number } | null = null;
-  private slider: { key: string; centerG: number } | null = null;
+  private scale: HTMLElement | null = null;
+  private dragging = false;
+  private renderPending = false;
   private busy = false;
 
   constructor(containerEl: HTMLElement, private app: App) {
@@ -30,6 +34,7 @@ export class GymBlock extends MarkdownRenderChild {
 
   async onload(): Promise<void> {
     this.containerEl.addClass("gym");
+    this.register(() => this.closeScale());
     try {
       const db = await openGymDb(this.app);
       this.db = db;
@@ -48,6 +53,10 @@ export class GymBlock extends MarkdownRenderChild {
   private render(): void {
     const db = this.db;
     if (!db) return;
+    if (this.dragging) {
+      this.renderPending = true;
+      return;
+    }
     const root = this.containerEl;
     try {
       this.exercises = loadExercises(db);
@@ -139,32 +148,11 @@ export class GymBlock extends MarkdownRenderChild {
       value.createSpan({ cls: "gym-weight-unit", text: step.exercise.perSide ? "kg per side" : "kg" });
     };
     showWeight();
-    this.bindHold(minus, key, weight, -STEP_G, showWeight);
-    this.bindHold(plus, key, weight, STEP_G, showWeight);
-
-    if (this.slider?.key === key) {
-      const { centerG } = this.slider;
-      const slider = root.createEl("input", { cls: "gym-slider", type: "range" });
-      slider.min = String(Math.max(0, centerG - SLIDER_RANGE_G));
-      slider.max = String(centerG + SLIDER_RANGE_G);
-      slider.step = String(SLIDER_STEP_G);
-      slider.value = String(weight.grams);
-      slider.oninput = () => {
-        weight.grams = Number(slider.value);
-        showWeight();
-      };
-      const scale = root.createDiv({ cls: "gym-slider-scale" });
-      scale.createSpan({ text: formatKg(Number(slider.min)) });
-      scale.createSpan({ text: formatKg(Number(slider.max)) });
-      value.onclick = () => {
-        this.slider = null;
-        this.render();
-      };
-    }
+    this.bindHold(minus, weight, -STEP_G, showWeight);
+    this.bindHold(plus, weight, STEP_G, showWeight);
 
     const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
     doneButton.onclick = () => this.run(async (db) => {
-      this.slider = null;
       const last = index === steps.length - 1;
       const now = new Date().toISOString();
       await db.transaction([
@@ -211,34 +199,94 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private bindHold(button: HTMLButtonElement, key: string, weight: { grams: number }, delta: number, show: () => void): void {
+  private bindHold(button: HTMLButtonElement, weight: { grams: number }, delta: number, show: () => void): void {
+    let pointerId: number | null = null;
     let timer: number | null = null;
-    let long = false;
-    const clear = () => {
+    let drag: { startY: number; startG: number; update: (grams: number) => void } | null = null;
+
+    const finish = () => {
       if (timer !== null) window.clearTimeout(timer);
       timer = null;
-    };
-    button.onpointerdown = () => {
-      long = false;
-      clear();
-      timer = window.setTimeout(() => {
-        long = true;
-        timer = null;
-        this.slider = { key, centerG: weight.grams };
+      drag = null;
+      pointerId = null;
+      this.closeScale();
+      this.dragging = false;
+      if (this.renderPending) {
+        this.renderPending = false;
         this.render();
+      }
+    };
+
+    button.addClass("gym-hold");
+    button.onpointerdown = (event) => {
+      if (pointerId !== null) return;
+      event.preventDefault();
+      pointerId = event.pointerId;
+      button.setPointerCapture(event.pointerId);
+      this.dragging = true;
+      const { clientX, clientY } = event;
+      timer = window.setTimeout(() => {
+        timer = null;
+        const startG = weight.grams;
+        drag = { startY: clientY, startG, update: this.openScale(clientX, clientY, startG) };
+        vibrate();
       }, LONG_PRESS_MS);
     };
-    button.onpointerup = () => {
-      const wasPending = timer !== null;
-      clear();
-      if (wasPending && !long) {
+    button.onpointermove = (event) => {
+      if (event.pointerId !== pointerId || !drag) return;
+      event.preventDefault();
+      const steps = Math.round((drag.startY - event.clientY) / DRAG_PX_PER_STEP);
+      const minG = Math.max(0, drag.startG - DRAG_RANGE_G);
+      const grams = Math.min(drag.startG + DRAG_RANGE_G, Math.max(minG, drag.startG + steps * DRAG_STEP_G));
+      if (grams === weight.grams) return;
+      weight.grams = grams;
+      drag.update(grams);
+      show();
+      vibrate();
+    };
+    button.onpointerup = (event) => {
+      if (event.pointerId !== pointerId) return;
+      const tap = timer !== null;
+      if (tap) {
         weight.grams = Math.max(0, weight.grams + delta);
         show();
       }
+      finish();
     };
-    button.onpointerleave = clear;
-    button.onpointercancel = clear;
+    button.onpointercancel = (event) => {
+      if (event.pointerId === pointerId) finish();
+    };
     button.oncontextmenu = (event) => event.preventDefault();
+  }
+
+  private openScale(x: number, y: number, startG: number): (grams: number) => void {
+    this.closeScale();
+    const minG = Math.max(0, startG - DRAG_RANGE_G);
+    const maxG = startG + DRAG_RANGE_G;
+    const top = (grams: number) => y - ((grams - startG) / DRAG_STEP_G) * DRAG_PX_PER_STEP;
+    const scale = document.body.createDiv({ cls: "gym-scale" });
+    if (x < 140) scale.addClass("gym-scale-right");
+    scale.style.left = `${x}px`;
+    const track = scale.createDiv({ cls: "gym-scale-track" });
+    track.style.top = `${top(maxG)}px`;
+    track.style.height = `${top(minG) - top(maxG)}px`;
+    for (let grams = Math.ceil(minG / SCALE_LABEL_EVERY_G) * SCALE_LABEL_EVERY_G; grams <= maxG; grams += SCALE_LABEL_EVERY_G) {
+      const tick = scale.createDiv({ cls: "gym-scale-tick", text: formatKg(grams) });
+      tick.style.top = `${top(grams)}px`;
+    }
+    const bubble = scale.createDiv({ cls: "gym-scale-bubble" });
+    this.scale = scale;
+    const update = (grams: number) => {
+      bubble.style.top = `${top(grams)}px`;
+      bubble.setText(formatKg(grams));
+    };
+    update(startG);
+    return update;
+  }
+
+  private closeScale(): void {
+    this.scale?.remove();
+    this.scale = null;
   }
 
   private async run(action: (db: LightDb) => Promise<unknown>): Promise<void> {
@@ -254,6 +302,10 @@ export class GymBlock extends MarkdownRenderChild {
     }
     this.render();
   }
+}
+
+function vibrate(): void {
+  if (typeof navigator.vibrate === "function") navigator.vibrate(8);
 }
 
 function setLabel(step: Step): string {

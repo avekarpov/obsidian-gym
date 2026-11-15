@@ -108,18 +108,6 @@
   color: var(--text-muted);
 }
 
-.gym .gym-slider {
-  width: 100%;
-}
-
-.gym .gym-slider-scale {
-  display: flex;
-  justify-content: space-between;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-  margin-top: calc(-1 * var(--size-4-2));
-}
-
 .gym .gym-primary {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
@@ -145,4 +133,72 @@
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.gym .gym-hold {
+  touch-action: none;
+}
+
+.gym-scale {
+  position: fixed;
+  top: 0;
+  width: 0;
+  height: 100vh;
+  pointer-events: none;
+  z-index: var(--layer-popover);
+}
+
+.gym-scale-track {
+  position: absolute;
+  left: -2px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+}
+
+.gym-scale-tick {
+  position: absolute;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.gym-scale-tick::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  width: 8px;
+  border-top: 1px solid var(--text-faint);
+}
+
+.gym-scale-bubble {
+  position: absolute;
+  right: 60px;
+  transform: translateY(-50%);
+  padding: 0.3em 0.7em;
+  border-radius: var(--radius-m);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 1.6em;
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-s);
+}
+
+.gym-scale-right .gym-scale-tick {
+  right: auto;
+  left: 10px;
+}
+
+.gym-scale-right .gym-scale-tick::after {
+  right: auto;
+  left: -10px;
+}
+
+.gym-scale-right .gym-scale-bubble {
+  right: auto;
+  left: 60px;
 }
