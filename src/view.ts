@@ -148,8 +148,9 @@ export class GymBlock extends MarkdownRenderChild {
       value.createSpan({ cls: "gym-weight-unit", text: step.exercise.perSide ? "kg per side" : "kg" });
     };
     showWeight();
-    this.bindHold(minus, weight, -STEP_G, showWeight);
-    this.bindHold(plus, weight, STEP_G, showWeight);
+    this.bindHold(minus, weight, -STEP_G, showWeight, LONG_PRESS_MS);
+    this.bindHold(plus, weight, STEP_G, showWeight, LONG_PRESS_MS);
+    this.bindHold(value, weight, null, showWeight, 0);
 
     const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
     doneButton.onclick = () => this.run(async (db) => {
@@ -199,7 +200,9 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private bindHold(button: HTMLButtonElement, weight: { grams: number }, delta: number, show: () => void): void {
+  private bindHold(
+    button: HTMLElement, weight: { grams: number }, delta: number | null, show: () => void, delayMs: number,
+  ): void {
     let pointerId: number | null = null;
     let timer: number | null = null;
     let drag: { startY: number; startG: number; update: (grams: number) => void } | null = null;
@@ -225,12 +228,14 @@ export class GymBlock extends MarkdownRenderChild {
       button.setPointerCapture(event.pointerId);
       this.dragging = true;
       const { clientX, clientY } = event;
-      timer = window.setTimeout(() => {
+      const start = () => {
         timer = null;
         const startG = weight.grams;
         drag = { startY: clientY, startG, update: this.openScale(clientX, clientY, startG) };
         vibrate();
-      }, LONG_PRESS_MS);
+      };
+      if (delayMs > 0) timer = window.setTimeout(start, delayMs);
+      else start();
     };
     button.onpointermove = (event) => {
       if (event.pointerId !== pointerId || !drag) return;
@@ -247,7 +252,7 @@ export class GymBlock extends MarkdownRenderChild {
     button.onpointerup = (event) => {
       if (event.pointerId !== pointerId) return;
       const tap = timer !== null;
-      if (tap) {
+      if (tap && delta !== null) {
         weight.grams = Math.max(0, weight.grams + delta);
         show();
       }
@@ -267,6 +272,9 @@ export class GymBlock extends MarkdownRenderChild {
     const scale = document.body.createDiv({ cls: "gym-scale" });
     if (x < 140) scale.addClass("gym-scale-right");
     scale.style.left = `${x}px`;
+    const panel = scale.createDiv({ cls: "gym-scale-panel" });
+    panel.style.top = `${Math.max(8, top(maxG) - 16)}px`;
+    panel.style.height = `${Math.min(window.innerHeight - 8, top(minG) + 16) - Math.max(8, top(maxG) - 16)}px`;
     const track = scale.createDiv({ cls: "gym-scale-track" });
     track.style.top = `${top(maxG)}px`;
     track.style.height = `${top(minG) - top(maxG)}px`;
