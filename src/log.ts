@@ -2,6 +2,7 @@ import { App, MarkdownRenderChild } from "obsidian";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { openGymDb } from "./schema";
+import { horizontalScroll } from "./scroll";
 import { Exercise, loadExercises, loadSchemes } from "./workout";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -71,7 +72,7 @@ export class LogBlock extends MarkdownRenderChild {
       const ids = group.ids.filter((id) => points.has(id) && exercises.has(id));
       if (!ids.length) continue;
       root.createEl("h3", { text: group.name });
-      const table = root.createEl("table", { cls: "gym-progress" });
+      const table = horizontalScroll(root).createEl("table", { cls: "gym-progress" });
       const head = table.createEl("thead").createEl("tr");
       for (const title of ["Exercise", "Trend", "Last", "Change"]) head.createEl("th", { text: title });
       const body = table.createEl("tbody");
@@ -83,7 +84,7 @@ export class LogBlock extends MarkdownRenderChild {
         const tr = body.createEl("tr");
         tr.createEl("td", { text: exercise.name });
         this.renderChart(tr.createEl("td", { cls: "gym-trend" }), series);
-        tr.createEl("td", { cls: "gym-num", text: `${formatKg(last)} kg${exercise.perSide ? " per side" : ""}` });
+        tr.createEl("td", { cls: "gym-num", text: `${formatKg(last)} kg${exercise.perSide ? " ×2" : ""}` });
         const diff = last - first;
         tr.createEl("td", {
           cls: `gym-num ${diff > 0 ? "gym-up" : diff < 0 ? "gym-down" : ""}`,

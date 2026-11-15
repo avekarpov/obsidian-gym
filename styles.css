@@ -397,3 +397,19 @@
   width: 100%;
   font-size: var(--font-ui-medium);
 }
+
+.gym-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.gym-scroll table {
+  margin: 0;
+}
+
+.gym-scroll td,
+.gym-scroll th {
+  white-space: nowrap;
+}

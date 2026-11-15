@@ -4,6 +4,7 @@ import { LightDb } from "./lightdb";
 import { EXERCISE_NOTES_DIR } from "./program";
 import { bindWeightDrag, closeScale } from "./scale";
 import { openGymDb } from "./schema";
+import { horizontalScroll } from "./scroll";
 import { Exercise, loadExercises, loadSchemes, Scheme } from "./workout";
 
 interface Draft {
@@ -70,7 +71,7 @@ export class PlanBlock extends MarkdownRenderChild {
       root.empty();
       for (const scheme of schemes) {
         root.createEl("h2", { text: scheme.name });
-        const table = root.createEl("table");
+        const table = horizontalScroll(root).createEl("table");
         const head = table.createEl("thead").createEl("tr");
         for (const title of ["Exercise", "Sets", "Reps", "Weight"]) head.createEl("th", { text: title });
         const body = table.createEl("tbody");
@@ -269,7 +270,7 @@ export class PlanBlock extends MarkdownRenderChild {
     const field = fields.createDiv({ cls: "gym-plan-field" });
     field.createSpan({ text: "Weight" });
     const value = field.createDiv({ cls: "gym-plan-weight" });
-    const show = () => value.setText(`${formatKg(draft.weight.grams)} kg${perSide ? " per side" : ""}`);
+    const show = () => value.setText(`${formatKg(draft.weight.grams)} kg${perSide ? " ×2" : ""}`);
     show();
     bindWeightDrag(value, draft.weight, show, {
       onStart: () => (this.dragging = true),
@@ -342,5 +343,5 @@ function nextPosition(db: LightDb, schemeId: string): number {
 }
 
 function weightText(grams: number, exercise: Exercise): string {
-  return `${formatKg(grams)} kg${exercise.perSide ? " per side" : ""}`;
+  return `${formatKg(grams)} kg${exercise.perSide ? " ×2" : ""}`;
 }
