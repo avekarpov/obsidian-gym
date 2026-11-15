@@ -1,5 +1,3 @@
-export type SchemeId = "chest" | "back" | "legs";
-
 export interface ExerciseSeed {
   id: string;
   name: string;
@@ -36,20 +34,20 @@ export const EXERCISES: ExerciseSeed[] = [
   { id: "bulgarian_split_squat", name: "Болгарские выпады", note: "Болгарские выпады (на ногу)", perSide: true, warmupSets: 0, workSets: 2, repsMin: 8, repsMax: 10, startWeightKg: null },
 ];
 
-export const SCHEMES: { id: SchemeId; label: string; exercises: string[] }[] = [
+export const SCHEME_SEED: { id: string; name: string; exercises: string[] }[] = [
   {
     id: "chest",
-    label: "Chest",
+    name: "Грудь + трицепс",
     exercises: ["chest_press_machine", "incline_db_press", "cable_crossover", "lateral_raise", "overhead_rope_extension", "straight_bar_pushdown"],
   },
   {
     id: "back",
-    label: "Back",
+    name: "Спина + бицепс",
     exercises: ["lat_pulldown", "t_bar_row", "hyperextension", "reverse_fly_machine", "seated_db_curl", "machine_curl"],
   },
   {
     id: "legs",
-    label: "Legs",
+    name: "Ноги",
     exercises: ["leg_press", "smith_squat", "seated_leg_curl", "leg_extension", "calf_raise", "glute_kickback_machine"],
   },
 ];

@@ -1,4 +1,6 @@
-import { EXERCISES } from "./program";
+import { App } from "obsidian";
+import { LightDb, lightDbApi } from "./lightdb";
+import { EXERCISES, SCHEME_SEED } from "./program";
 
 export const DB_NAME = "gym";
 
@@ -49,7 +51,35 @@ function seed(): string {
     `INSERT INTO plan (id, warmup_sets, work_sets, reps_min, reps_max, start_weight_g) VALUES\n  ${plan};`;
 }
 
+function schemes(): string {
+  const rows = SCHEME_SEED.map((s, i) => `(${[s.id, s.name, i + 1].map(literal).join(", ")})`).join(",\n  ");
+  const items = SCHEME_SEED.flatMap((s) => s.exercises.map((exercise, i) =>
+    `(${[`${s.id}:${exercise}`, s.id, exercise, i + 1].map(literal).join(", ")})`)).join(",\n  ");
+  return `CREATE TABLE schemes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  position INTEGER NOT NULL
+);
+CREATE TABLE scheme_exercises (
+  id TEXT PRIMARY KEY,
+  scheme_id TEXT NOT NULL,
+  exercise_id TEXT NOT NULL,
+  position INTEGER NOT NULL
+);
+INSERT INTO schemes (id, name, position) VALUES\n  ${rows};
+INSERT INTO scheme_exercises (id, scheme_id, exercise_id, position) VALUES\n  ${items};`;
+}
+
 export const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "001_schema", sql: SCHEMA },
   { id: "002_seed", sql: seed() },
+  { id: "003_schemes", sql: schemes() },
 ];
+
+export async function openGymDb(app: App): Promise<LightDb> {
+  const api = lightDbApi(app);
+  if (!api) throw new Error("LightDB plugin is required. Enable it in Community plugins.");
+  const db = await api.open(DB_NAME);
+  for (const migration of MIGRATIONS) await db.migrate(migration.id, migration.sql);
+  return db;
+}

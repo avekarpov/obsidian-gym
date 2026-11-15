@@ -1,10 +1,11 @@
 import { App, MarkdownRenderChild } from "obsidian";
-import { LightDb, lightDbApi } from "./lightdb";
-import { EXERCISE_NOTES_DIR, SCHEMES, SchemeId } from "./program";
-import { DB_NAME, MIGRATIONS } from "./schema";
+import { formatKg } from "./format";
+import { LightDb } from "./lightdb";
+import { EXERCISE_NOTES_DIR } from "./program";
+import { openGymDb } from "./schema";
 import {
   activeWorkout, buildSteps, defaultWeightG, doneKeys, Exercise, getWorkout,
-  loadExercises, Step, stepKey, workSetCount,
+  loadExercises, loadSchemes, Scheme, Step, stepKey, workSetCount,
 } from "./workout";
 
 const STEP_G = 1000;
@@ -12,11 +13,12 @@ const SLIDER_RANGE_G = 20000;
 const SLIDER_STEP_G = 500;
 const LONG_PRESS_MS = 450;
 
-type Mode = { kind: "idle" } | { kind: "choose"; chosen: Set<SchemeId> } | { kind: "finished"; workoutId: string };
+type Mode = { kind: "idle" } | { kind: "choose"; chosen: Set<string> } | { kind: "finished"; workoutId: string };
 
 export class GymBlock extends MarkdownRenderChild {
   private db: LightDb | null = null;
   private exercises = new Map<string, Exercise>();
+  private schemes: Scheme[] = [];
   private mode: Mode = { kind: "idle" };
   private weight: { key: string; grams: number } | null = null;
   private slider: { key: string; centerG: number } | null = null;
@@ -28,14 +30,8 @@ export class GymBlock extends MarkdownRenderChild {
 
   async onload(): Promise<void> {
     this.containerEl.addClass("gym");
-    const api = lightDbApi(this.app);
-    if (!api) {
-      this.message("LightDB plugin is required. Enable it in Community plugins.");
-      return;
-    }
     try {
-      const db = await api.open(DB_NAME);
-      for (const migration of MIGRATIONS) await db.migrate(migration.id, migration.sql);
+      const db = await openGymDb(this.app);
       this.db = db;
       this.register(db.onChange(() => this.render()));
       this.render();
@@ -52,8 +48,14 @@ export class GymBlock extends MarkdownRenderChild {
   private render(): void {
     const db = this.db;
     if (!db) return;
-    this.exercises = loadExercises(db);
     const root = this.containerEl;
+    try {
+      this.exercises = loadExercises(db);
+      this.schemes = loadSchemes(db);
+    } catch (error) {
+      this.message(error instanceof Error ? error.message : String(error));
+      return;
+    }
     root.empty();
     const active = activeWorkout(db);
     if (active) return this.renderStep(root, db, active.id, active.schemes, active.startedAt);
@@ -70,10 +72,10 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private renderChoose(root: HTMLElement, chosen: Set<SchemeId>): void {
+  private renderChoose(root: HTMLElement, chosen: Set<string>): void {
     root.createDiv({ cls: "gym-title", text: "What are we training?" });
     const list = root.createDiv({ cls: "gym-schemes" });
-    for (const scheme of SCHEMES) {
+    for (const scheme of this.schemes) {
       const label = list.createEl("label", { cls: "gym-scheme" });
       const box = label.createEl("input", { type: "checkbox" });
       box.checked = chosen.has(scheme.id);
@@ -82,7 +84,7 @@ export class GymBlock extends MarkdownRenderChild {
         else chosen.delete(scheme.id);
         start.disabled = chosen.size === 0;
       };
-      label.createSpan({ text: scheme.label });
+      label.createSpan({ text: scheme.name });
     }
     const actions = root.createDiv({ cls: "gym-actions" });
     const cancel = actions.createEl("button", { text: "Cancel" });
@@ -93,7 +95,7 @@ export class GymBlock extends MarkdownRenderChild {
     const start = actions.createEl("button", { cls: "gym-primary", text: "Start" });
     start.disabled = chosen.size === 0;
     start.onclick = () => this.run(async (db) => {
-      const schemes = SCHEMES.map((s) => s.id).filter((id) => chosen.has(id));
+      const schemes = this.schemes.map((s) => s.id).filter((id) => chosen.has(id));
       this.mode = { kind: "idle" };
       await db.put("workouts", crypto.randomUUID(), {
         schemes: schemes.join(","),
@@ -103,8 +105,8 @@ export class GymBlock extends MarkdownRenderChild {
     });
   }
 
-  private renderStep(root: HTMLElement, db: LightDb, workoutId: string, schemes: SchemeId[], startedAt: string): void {
-    const steps = buildSteps(this.exercises, schemes);
+  private renderStep(root: HTMLElement, db: LightDb, workoutId: string, selected: string[], startedAt: string): void {
+    const steps = buildSteps(this.exercises, this.schemes, selected);
     const done = doneKeys(db, workoutId);
     const index = steps.findIndex((s) => !done.has(stepKey(s)));
     if (index < 0) {
@@ -117,8 +119,7 @@ export class GymBlock extends MarkdownRenderChild {
     const weight = this.weight;
 
     const header = root.createDiv({ cls: "gym-header" });
-    const scheme = SCHEMES.find((s) => s.id === step.scheme)?.label ?? step.scheme;
-    header.createSpan({ text: `${scheme} · exercise ${step.exerciseIndex + 1} of ${step.exerciseCount}` });
+    header.createSpan({ text: `${step.scheme.name} · exercise ${step.exerciseIndex + 1} of ${step.exerciseCount}` });
     header.createSpan({ text: `started ${formatTime(startedAt)}` });
 
     const name = root.createDiv({ cls: "gym-exercise", text: step.exercise.name });
@@ -260,10 +261,6 @@ function setLabel(step: Step): string {
   const { repsMin, repsMax } = step.exercise;
   const reps = repsMin === null ? "" : repsMin === repsMax || repsMax === null ? ` · ${repsMin} reps` : ` · ${repsMin}–${repsMax} reps`;
   return `Set ${step.setNo} of ${step.setCount}${reps}`;
-}
-
-function formatKg(grams: number): string {
-  return (grams / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 });
 }
 
 function formatTime(iso: string): string {
