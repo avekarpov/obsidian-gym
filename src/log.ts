@@ -1,4 +1,4 @@
-import { App, MarkdownRenderChild } from "obsidian";
+import { App, MarkdownRenderChild, Notice } from "obsidian";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { openGymDb } from "./schema";
@@ -129,6 +129,19 @@ export class LogBlock extends MarkdownRenderChild {
     });
   }
 
+  private async deleteWorkout(db: LightDb, workoutId: string): Promise<void> {
+    const sets = db.all("SELECT id FROM sets WHERE workout_id = ?", [workoutId]);
+    try {
+      await db.transaction([
+        ...sets.map((s) => ({ op: "delete" as const, table: "sets", row: s.id as string })),
+        { op: "delete" as const, table: "workouts", row: workoutId },
+      ]);
+      this.open.delete(workoutId);
+    } catch (error) {
+      new Notice(`Gym: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private renderWorkouts(root: HTMLElement, db: LightDb, exercises: Map<string, Exercise>): void {
     const schemeNames = new Map(loadSchemes(db).map((s) => [s.id, s.name]));
     const workouts = db.all("SELECT * FROM workouts ORDER BY started_at DESC");
@@ -149,7 +162,13 @@ export class LogBlock extends MarkdownRenderChild {
       const duration = finished
         ? `${Math.round((Date.parse(finished) - Date.parse(w.started_at as string)) / 60000)} min`
         : "in progress";
-      details.createEl("summary", { text: `${formatDate(w.started_at as string)} · ${names} · ${duration}` });
+      const title = `${formatDate(w.started_at as string)} · ${names} · ${duration}`;
+      details.createEl("summary", { text: title });
+      const remove = details.createDiv({ cls: "gym-workout-actions" }).createEl("button", { cls: "mod-warning", text: "Delete workout" });
+      remove.onclick = () => {
+        if (!window.confirm(`Delete workout ${title}? Its sets are deleted too.`)) return;
+        void this.deleteWorkout(db, id);
+      };
 
       const sets = db.all("SELECT exercise_id, kind, weight_g FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [id]);
       if (!sets.length) {

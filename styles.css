@@ -413,3 +413,9 @@
 .gym-scroll th {
   white-space: nowrap;
 }
+
+.gym-log .gym-workout-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--size-4-2);
+}
