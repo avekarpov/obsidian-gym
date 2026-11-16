@@ -94,6 +94,7 @@ ALTER TABLE plan DROP COLUMN reps_min;
 ALTER TABLE plan DROP COLUMN reps_max;
 ALTER TABLE plan DROP COLUMN start_weight_g;`,
   },
+  { id: "006_current_exercise", sql: "ALTER TABLE workouts ADD COLUMN current_exercise TEXT;" },
 ];
 
 export async function openGymDb(app: App): Promise<LightDb> {

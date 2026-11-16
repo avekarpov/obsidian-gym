@@ -6,7 +6,7 @@ import { bindWeightDrag, closeScale } from "./scale";
 import { openGymDb } from "./schema";
 import {
   activeWorkout, buildSteps, defaultWeightG, doneKeys, Exercise, getWorkout,
-  loadExercises, loadSchemes, planWeightUpdates, Scheme, Step, stepKey, workSetCount,
+  loadExercises, loadSchemes, pickStep, planWeightUpdates, Scheme, Step, stepKey, Workout, workSetCount,
 } from "./workout";
 
 type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
@@ -20,6 +20,7 @@ export class GymBlock extends MarkdownRenderChild {
   private dragging = false;
   private renderPending = false;
   private busy = false;
+  private switching = false;
 
   constructor(containerEl: HTMLElement, private app: App) {
     super(containerEl);
@@ -60,7 +61,8 @@ export class GymBlock extends MarkdownRenderChild {
     }
     root.empty();
     const active = activeWorkout(db);
-    if (active) return this.renderStep(root, db, active.id, active.schemes, active.startedAt);
+    if (active) return this.renderStep(root, db, active);
+    this.switching = false;
     if (this.mode.kind === "finished") return this.renderFinished(root, db, this.mode.workoutId);
     if (this.mode.kind === "choose") return this.renderChoose(root);
     this.renderIdle(root);
@@ -93,18 +95,19 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private renderStep(root: HTMLElement, db: LightDb, workoutId: string, selected: string[], startedAt: string): void {
-    const steps = buildSteps(this.exercises, this.schemes, selected);
+  private renderStep(root: HTMLElement, db: LightDb, workout: Workout): void {
+    const { id: workoutId, startedAt } = workout;
+    const steps = buildSteps(this.exercises, this.schemes, workout.schemes);
     const done = doneKeys(db, workoutId);
-    const index = steps.findIndex((s) => !done.has(stepKey(s)));
-    if (index < 0) {
+    const step = pickStep(steps, done, workout.currentExercise);
+    if (!step) {
       void this.run((db) => db.transaction([
         { op: "put", table: "workouts", row: workoutId, fields: { finished_at: new Date().toISOString() } },
         ...planWeightUpdates(db, workoutId, []),
       ]));
       return;
     }
-    const step = steps[index];
+    if (this.switching) return this.renderSwitch(root, steps, done, step, workoutId);
     const key = stepKey(step);
     if (this.weight?.key !== key) this.weight = { key, grams: defaultWeightG(db, workoutId, step.exercise) };
     const weight = this.weight;
@@ -168,7 +171,12 @@ export class GymBlock extends MarkdownRenderChild {
       true,
     );
 
-    const next = steps[index + 1];
+    root.createEl("button", { cls: "gym-switch", text: "Change exercise" }).onclick = () => {
+      this.switching = true;
+      this.render();
+    };
+
+    const next = pickStep(steps, new Set([...done, key]), step.exercise.id);
     if (next) {
       root.createDiv({
         cls: "gym-next",
@@ -186,6 +194,35 @@ export class GymBlock extends MarkdownRenderChild {
           ...planWeightUpdates(db, workoutId, []),
         ]);
       });
+    };
+  }
+
+  private renderSwitch(root: HTMLElement, steps: Step[], done: Set<string>, current: Step, workoutId: string): void {
+    root.createDiv({ cls: "gym-title", text: "Change exercise" });
+    const list = root.createDiv({ cls: "gym-switch-list" });
+    const seen = new Set<string>();
+    for (const step of steps) {
+      if (seen.has(step.exercise.id)) continue;
+      seen.add(step.exercise.id);
+      const own = steps.filter((s) => s.exercise.id === step.exercise.id);
+      const finished = own.filter((s) => done.has(stepKey(s))).length;
+      const item = list.createEl("button", { cls: "gym-switch-item" });
+      if (step.exercise.id === current.exercise.id) item.addClass("is-current");
+      item.createSpan({ text: step.exercise.name });
+      item.createSpan({ cls: "gym-switch-progress", text: finished === own.length ? "done" : `${finished}/${own.length}` });
+      item.disabled = finished === own.length;
+      item.onclick = () => {
+        this.switching = false;
+        if (step.exercise.id === current.exercise.id) {
+          this.render();
+          return;
+        }
+        void this.run((db) => db.put("workouts", workoutId, { current_exercise: step.exercise.id }));
+      };
+    }
+    root.createEl("button", { text: "Back" }).onclick = () => {
+      this.switching = false;
+      this.render();
     };
   }
 

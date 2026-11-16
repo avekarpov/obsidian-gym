@@ -29,6 +29,7 @@ export interface Workout {
   schemes: string[];
   startedAt: string;
   finishedAt: string | null;
+  currentExercise: string | null;
 }
 
 export interface RecordedSet {
@@ -77,6 +78,7 @@ function toWorkout(row: Record<string, unknown>): Workout {
     schemes: (row.schemes as string).split(",").filter(Boolean),
     startedAt: row.started_at as string,
     finishedAt: row.finished_at as string | null,
+    currentExercise: (row.current_exercise as string | null | undefined) ?? null,
   };
 }
 
@@ -99,6 +101,11 @@ export function doneKeys(db: LightDb, workoutId: string): Set<string> {
 
 export function stepKey(step: Step): string {
   return `${step.exercise.id}:${step.setNo}`;
+}
+
+export function pickStep(steps: Step[], done: Set<string>, preferExercise: string | null): Step | null {
+  const open = steps.filter((s) => !done.has(stepKey(s)));
+  return open.find((s) => s.exercise.id === preferExercise) ?? open[0] ?? null;
 }
 
 export function defaultWeightG(db: LightDb, workoutId: string, exercise: Exercise): number {
