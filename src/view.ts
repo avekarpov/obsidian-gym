@@ -128,7 +128,7 @@ export class GymBlock extends MarkdownRenderChild {
     const showWeight = () => {
       value.empty();
       value.createSpan({ cls: "gym-weight-number", text: formatKg(weight.grams) });
-      value.createSpan({ cls: "gym-weight-unit", text: step.exercise.perSide ? "kg per side" : "kg" });
+      value.createSpan({ cls: "gym-weight-unit", text: "kg" });
     };
     showWeight();
     bindWeightDrag(value, weight, showWeight, {

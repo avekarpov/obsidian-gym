@@ -11,7 +11,6 @@ interface Draft {
   schemeId: string;
   exerciseId: string;
   name: string;
-  perSide: boolean;
   sets: string;
   reps: string;
   weight: { grams: number };
@@ -21,7 +20,6 @@ interface NewExercise {
   schemeId: string;
   existingId: string;
   name: string;
-  perSide: boolean;
   sets: string;
   reps: string;
   weight: { grams: number };
@@ -86,7 +84,7 @@ export class PlanBlock extends MarkdownRenderChild {
           root.createEl("button", { cls: "gym-plan-add", text: "Add exercise" }).onclick = () => {
             this.draft = null;
             this.adding = {
-              schemeId: scheme.id, existingId: "", name: "", perSide: false,
+              schemeId: scheme.id, existingId: "", name: "",
               sets: "3", reps: "12", weight: { grams: 0 },
             };
             this.render();
@@ -106,7 +104,6 @@ export class PlanBlock extends MarkdownRenderChild {
         schemeId: scheme.id,
         exerciseId: exercise.id,
         name: exercise.name,
-        perSide: exercise.perSide,
         sets: String(exercise.sets),
         reps: exercise.reps === null ? "" : String(exercise.reps),
         weight: { grams: exercise.weightG ?? 0 },
@@ -127,14 +124,6 @@ export class PlanBlock extends MarkdownRenderChild {
     const name = nameField.createEl("input", { cls: "gym-plan-name", type: "text" });
     name.value = draft.name;
     name.oninput = () => (draft.name = name.value);
-    const sideField = cell.createEl("label", { cls: "gym-plan-check" });
-    const side = sideField.createEl("input", { type: "checkbox" });
-    side.checked = draft.perSide;
-    side.onchange = () => {
-      draft.perSide = side.checked;
-      this.render();
-    };
-    sideField.createSpan({ text: "Weight per side (dumbbells, one arm or leg)" });
     const fields = cell.createDiv({ cls: "gym-plan-fields" });
     this.planFields(fields, draft);
 
@@ -168,7 +157,7 @@ export class PlanBlock extends MarkdownRenderChild {
       }
       void this.act(async () => {
         await db.transaction([
-          { op: "put", table: "exercises", row: draft.exerciseId, fields: { name: newName, per_side: draft.perSide ? 1 : 0 } },
+          { op: "put", table: "exercises", row: draft.exerciseId, fields: { name: newName } },
           { op: "put", table: "plan", row: draft.exerciseId, fields: plan },
         ]);
         this.draft = null;
@@ -200,15 +189,6 @@ export class PlanBlock extends MarkdownRenderChild {
       const name = nameField.createEl("input", { type: "text", attr: { placeholder: "Подтягивания" } });
       name.value = form.name;
       name.oninput = () => (form.name = name.value);
-
-      const sideField = box.createEl("label", { cls: "gym-plan-check" });
-      const side = sideField.createEl("input", { type: "checkbox" });
-      side.checked = form.perSide;
-      side.onchange = () => {
-        form.perSide = side.checked;
-        this.render();
-      };
-      sideField.createSpan({ text: "Weight per side (dumbbells, one arm or leg)" });
 
       this.planFields(box.createDiv({ cls: "gym-plan-fields" }), form);
     } else {
@@ -247,7 +227,7 @@ export class PlanBlock extends MarkdownRenderChild {
       const exerciseId = `ex_${crypto.randomUUID().slice(0, 8)}`;
       void this.act(async () => {
         await db.transaction([
-          { op: "put", table: "exercises", row: exerciseId, fields: { name, note: null, per_side: form.perSide ? 1 : 0 } },
+          { op: "put", table: "exercises", row: exerciseId, fields: { name, note: null, per_side: 0 } },
           { op: "put", table: "plan", row: exerciseId, fields: plan },
           { op: "put", table: "scheme_exercises", row: `${scheme.id}:${exerciseId}`, fields: { scheme_id: scheme.id, exercise_id: exerciseId, position } },
         ]);

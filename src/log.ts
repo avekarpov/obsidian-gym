@@ -84,7 +84,7 @@ export class LogBlock extends MarkdownRenderChild {
         const tr = body.createEl("tr");
         tr.createEl("td", { text: exercise.name });
         this.renderChart(tr.createEl("td", { cls: "gym-trend" }), series);
-        tr.createEl("td", { cls: "gym-num", text: `${formatKg(last)} kg${exercise.perSide ? " ×2" : ""}` });
+        tr.createEl("td", { cls: "gym-num", text: `${formatKg(last)} kg` });
         const diff = last - first;
         tr.createEl("td", {
           cls: `gym-num ${diff > 0 ? "gym-up" : diff < 0 ? "gym-down" : ""}`,

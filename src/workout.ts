@@ -4,7 +4,6 @@ export interface Exercise {
   id: string;
   name: string;
   note: string | null;
-  perSide: boolean;
   sets: number;
   reps: number | null;
   weightG: number | null;
@@ -39,13 +38,12 @@ export interface RecordedSet {
 }
 
 export function loadExercises(db: LightDb): Map<string, Exercise> {
-  const rows = db.all(`SELECT e.id, e.name, e.note, e.per_side, p.sets, p.reps, p.weight_g
+  const rows = db.all(`SELECT e.id, e.name, e.note, p.sets, p.reps, p.weight_g
     FROM exercises e JOIN plan p ON p.id = e.id`);
   return new Map(rows.map((r) => [r.id as string, {
     id: r.id as string,
     name: r.name as string,
     note: r.note as string | null,
-    perSide: r.per_side === 1,
     sets: r.sets as number,
     reps: r.reps as number | null,
     weightG: r.weight_g as number | null,
