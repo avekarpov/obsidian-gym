@@ -1,8 +1,6 @@
 import { App, MarkdownRenderChild, Notice } from "obsidian";
-import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { EXERCISE_NOTES_DIR } from "./program";
-import { bindWeightDrag, closeScale } from "./scale";
 import { openGymDb } from "./schema";
 import { horizontalScroll } from "./scroll";
 import { Exercise, loadExercises, loadSchemes, Scheme } from "./workout";
@@ -13,7 +11,6 @@ interface Draft {
   name: string;
   sets: string;
   reps: string;
-  weight: { grams: number };
 }
 
 interface NewExercise {
@@ -22,15 +19,12 @@ interface NewExercise {
   name: string;
   sets: string;
   reps: string;
-  weight: { grams: number };
 }
 
 export class PlanBlock extends MarkdownRenderChild {
   private db: LightDb | null = null;
   private draft: Draft | null = null;
   private adding: NewExercise | null = null;
-  private dragging = false;
-  private renderPending = false;
   private saving = false;
 
   constructor(containerEl: HTMLElement, private app: App) {
@@ -39,7 +33,6 @@ export class PlanBlock extends MarkdownRenderChild {
 
   async onload(): Promise<void> {
     this.containerEl.addClass("gym-plan");
-    this.register(closeScale);
     try {
       const db = await openGymDb(this.app);
       this.db = db;
@@ -58,10 +51,6 @@ export class PlanBlock extends MarkdownRenderChild {
   private render(): void {
     const db = this.db;
     if (!db) return;
-    if (this.dragging) {
-      this.renderPending = true;
-      return;
-    }
     const root = this.containerEl;
     try {
       const exercises = loadExercises(db);
@@ -71,7 +60,7 @@ export class PlanBlock extends MarkdownRenderChild {
         root.createEl("h2", { text: scheme.name });
         const table = horizontalScroll(root).createEl("table");
         const head = table.createEl("thead").createEl("tr");
-        for (const title of ["Exercise", "Sets", "Reps", "Weight (kg)"]) head.createEl("th", { text: title });
+        for (const title of ["Exercise", "Sets", "Reps"]) head.createEl("th", { text: title });
         const body = table.createEl("tbody");
         for (const id of scheme.exercises) {
           const exercise = exercises.get(id);
@@ -85,7 +74,7 @@ export class PlanBlock extends MarkdownRenderChild {
             this.draft = null;
             this.adding = {
               schemeId: scheme.id, existingId: "", name: "",
-              sets: "3", reps: "12", weight: { grams: 0 },
+              sets: "3", reps: "12",
             };
             this.render();
           };
@@ -106,18 +95,16 @@ export class PlanBlock extends MarkdownRenderChild {
         name: exercise.name,
         sets: String(exercise.sets),
         reps: exercise.reps === null ? "" : String(exercise.reps),
-        weight: { grams: exercise.weightG ?? 0 },
       };
       this.render();
     };
     this.renderName(tr.createEl("td"), exercise);
     tr.createEl("td", { cls: "gym-num", text: String(exercise.sets) });
     tr.createEl("td", { cls: "gym-num", text: exercise.reps === null ? "—" : String(exercise.reps) });
-    tr.createEl("td", { cls: "gym-num", text: exercise.weightG === null ? "—" : formatKg(exercise.weightG) });
   }
 
   private renderEditor(body: HTMLElement, db: LightDb, scheme: Scheme, exercise: Exercise, draft: Draft): void {
-    const cell = body.createEl("tr", { cls: "gym-plan-edit" }).createEl("td", { attr: { colspan: "4" } });
+    const cell = body.createEl("tr", { cls: "gym-plan-edit" }).createEl("td", { attr: { colspan: "3" } });
     this.renderName(cell.createDiv({ cls: "gym-plan-edit-name" }), exercise);
     const nameField = cell.createEl("label", { cls: "gym-plan-field" });
     nameField.createSpan({ text: "Name" });
@@ -196,7 +183,7 @@ export class PlanBlock extends MarkdownRenderChild {
       if (existing) {
         box.createDiv({
           cls: "gym-muted",
-          text: `${existing.sets} × ${existing.reps ?? "—"} · ${existing.weightG === null ? "—" : `${formatKg(existing.weightG)} kg`}. Edit the plan after adding.`,
+          text: `${existing.sets} × ${existing.reps ?? "—"}. Edit the plan after adding.`,
         });
       }
     }
@@ -236,7 +223,7 @@ export class PlanBlock extends MarkdownRenderChild {
     };
   }
 
-  private planFields(fields: HTMLElement, draft: { sets: string; reps: string; weight: { grams: number } }): void {
+  private planFields(fields: HTMLElement, draft: { sets: string; reps: string }): void {
     const number = (label: string, value: string, set: (v: string) => void) => {
       const field = fields.createEl("label", { cls: "gym-plan-field" });
       field.createSpan({ text: label });
@@ -246,22 +233,6 @@ export class PlanBlock extends MarkdownRenderChild {
     };
     number("Sets", draft.sets, (v) => (draft.sets = v));
     number("Reps", draft.reps, (v) => (draft.reps = v));
-
-    const field = fields.createDiv({ cls: "gym-plan-field" });
-    field.createSpan({ text: "Weight (kg)" });
-    const value = field.createDiv({ cls: "gym-plan-weight" });
-    const show = () => value.setText(formatKg(draft.weight.grams));
-    show();
-    bindWeightDrag(value, draft.weight, show, {
-      onStart: () => (this.dragging = true),
-      onEnd: () => {
-        this.dragging = false;
-        if (this.renderPending) {
-          this.renderPending = false;
-          this.render();
-        }
-      },
-    });
   }
 
   private async move(db: LightDb, scheme: Scheme, exerciseId: string, shift: number): Promise<void> {
@@ -307,14 +278,14 @@ export class PlanBlock extends MarkdownRenderChild {
   }
 }
 
-function parsePlan(draft: { sets: string; reps: string; weight: { grams: number } }): { sets: number; reps: number; weight_g: number } | null {
+function parsePlan(draft: { sets: string; reps: string }): { sets: number; reps: number } | null {
   const sets = Number(draft.sets);
   const reps = Number(draft.reps);
   if (!Number.isInteger(sets) || sets < 1 || !Number.isInteger(reps) || reps < 1) {
     new Notice("Gym: sets and reps must be whole numbers from 1");
     return null;
   }
-  return { sets, reps, weight_g: draft.weight.grams };
+  return { sets, reps };
 }
 
 function nextPosition(db: LightDb, schemeId: string): number {

@@ -327,17 +327,6 @@
   font-size: var(--font-ui-medium);
 }
 
-.gym-plan .gym-plan-weight {
-  padding: var(--size-2-2) var(--size-4-3);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: var(--background-primary);
-  color: var(--text-normal);
-  font-size: var(--font-ui-large);
-  font-weight: var(--font-bold);
-  font-variant-numeric: tabular-nums;
-}
-
 .gym-plan .gym-plan-actions {
   display: flex;
   justify-content: flex-end;
