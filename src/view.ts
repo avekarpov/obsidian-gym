@@ -9,7 +9,7 @@ import {
   loadExercises, loadSchemes, planWeightUpdates, Scheme, Step, stepKey, workSetCount,
 } from "./workout";
 
-type Mode = { kind: "idle" } | { kind: "choose"; chosen: Set<string> } | { kind: "finished"; workoutId: string };
+type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
 
 export class GymBlock extends MarkdownRenderChild {
   private db: LightDb | null = null;
@@ -62,49 +62,35 @@ export class GymBlock extends MarkdownRenderChild {
     const active = activeWorkout(db);
     if (active) return this.renderStep(root, db, active.id, active.schemes, active.startedAt);
     if (this.mode.kind === "finished") return this.renderFinished(root, db, this.mode.workoutId);
-    if (this.mode.kind === "choose") return this.renderChoose(root, this.mode.chosen);
+    if (this.mode.kind === "choose") return this.renderChoose(root);
     this.renderIdle(root);
   }
 
   private renderIdle(root: HTMLElement): void {
     const start = root.createEl("button", { cls: "gym-primary gym-big", text: "Start workout" });
     start.onclick = () => {
-      this.mode = { kind: "choose", chosen: new Set() };
+      this.mode = { kind: "choose" };
       this.render();
     };
   }
 
-  private renderChoose(root: HTMLElement, chosen: Set<string>): void {
+  private renderChoose(root: HTMLElement): void {
     root.createDiv({ cls: "gym-title", text: "What are we training?" });
     const list = root.createDiv({ cls: "gym-schemes" });
     for (const scheme of this.schemes) {
-      const label = list.createEl("label", { cls: "gym-scheme" });
-      const box = label.createEl("input", { type: "checkbox" });
-      box.checked = chosen.has(scheme.id);
-      box.onchange = () => {
-        if (box.checked) chosen.add(scheme.id);
-        else chosen.delete(scheme.id);
-        start.disabled = chosen.size === 0;
-      };
-      label.createSpan({ text: scheme.name });
+      list.createEl("button", { cls: "gym-primary gym-big", text: scheme.name }).onclick = () => this.run(async (db) => {
+        this.mode = { kind: "idle" };
+        await db.put("workouts", crypto.randomUUID(), {
+          schemes: scheme.id,
+          started_at: new Date().toISOString(),
+          finished_at: null,
+        });
+      });
     }
-    const actions = root.createDiv({ cls: "gym-actions" });
-    const cancel = actions.createEl("button", { text: "Cancel" });
-    cancel.onclick = () => {
+    root.createEl("button", { text: "Cancel" }).onclick = () => {
       this.mode = { kind: "idle" };
       this.render();
     };
-    const start = actions.createEl("button", { cls: "gym-primary", text: "Start" });
-    start.disabled = chosen.size === 0;
-    start.onclick = () => this.run(async (db) => {
-      const schemes = this.schemes.map((s) => s.id).filter((id) => chosen.has(id));
-      this.mode = { kind: "idle" };
-      await db.put("workouts", crypto.randomUUID(), {
-        schemes: schemes.join(","),
-        started_at: new Date().toISOString(),
-        finished_at: null,
-      });
-    });
   }
 
   private renderStep(root: HTMLElement, db: LightDb, workoutId: string, selected: string[], startedAt: string): void {
