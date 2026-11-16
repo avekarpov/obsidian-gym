@@ -6,7 +6,7 @@ import { bindWeightDrag, closeScale } from "./scale";
 import { openGymDb } from "./schema";
 import {
   activeWorkout, buildSteps, defaultWeightG, doneKeys, Exercise, getWorkout,
-  loadExercises, loadSchemes, pickStep, planWeightUpdates, Scheme, Step, stepKey, Workout, workSetCount,
+  lastAction, loadExercises, loadSchemes, pickStep, planWeightUpdates, Scheme, Step, stepKey, Workout, workSetCount,
 } from "./workout";
 
 type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
@@ -171,7 +171,21 @@ export class GymBlock extends MarkdownRenderChild {
       true,
     );
 
-    root.createEl("button", { cls: "gym-switch", text: "Change exercise" }).onclick = () => {
+    const extra = root.createDiv({ cls: "gym-skips" });
+    const undo = extra.createEl("button", { text: "Undo last set" });
+    const last = lastAction(db, workoutId);
+    undo.disabled = !last;
+    undo.onclick = () => {
+      if (!last) return;
+      void this.run(async (db) => {
+        await db.transaction([
+          ...last.setIds.map((id) => ({ op: "delete" as const, table: "sets", row: id })),
+          { op: "put" as const, table: "workouts", row: workoutId, fields: { current_exercise: last.exerciseId } },
+        ]);
+        this.weight = { key: `${last.exerciseId}:${last.setNo}`, grams: last.grams };
+      });
+    };
+    extra.createEl("button", { text: "Change exercise" }).onclick = () => {
       this.switching = true;
       this.render();
     };

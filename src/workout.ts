@@ -103,6 +103,29 @@ export function stepKey(step: Step): string {
   return `${step.exercise.id}:${step.setNo}`;
 }
 
+export interface LastAction {
+  setIds: string[];
+  exerciseId: string;
+  setNo: number;
+  grams: number;
+}
+
+export function lastAction(db: LightDb, workoutId: string): LastAction | null {
+  const rows = db.all(
+    `SELECT id, exercise_id, set_no, weight_g FROM sets
+     WHERE workout_id = ? AND done_at = (SELECT max(done_at) FROM sets WHERE workout_id = ?)
+     ORDER BY set_no`,
+    [workoutId, workoutId],
+  );
+  if (!rows.length) return null;
+  return {
+    setIds: rows.map((r) => r.id as string),
+    exerciseId: rows[0].exercise_id as string,
+    setNo: rows[0].set_no as number,
+    grams: rows[0].weight_g as number,
+  };
+}
+
 export function pickStep(steps: Step[], done: Set<string>, preferExercise: string | null): Step | null {
   const open = steps.filter((s) => !done.has(stepKey(s)));
   return open.find((s) => s.exercise.id === preferExercise) ?? open[0] ?? null;
