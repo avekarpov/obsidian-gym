@@ -2,6 +2,7 @@ import { App, Notice, Plugin, PluginSettingTab, Setting, TFile } from "obsidian"
 import { LlmExporter } from "./export";
 import { LogBlock } from "./log";
 import { PlanBlock } from "./plan";
+import { lightDbApi } from "./lightdb";
 import { openGymDb } from "./schema";
 import { GymBlock } from "./view";
 
@@ -12,10 +13,13 @@ interface GymSettings {
 }
 
 const DEFAULT_SETTINGS: GymSettings = { llmExportPath: "" };
+const LIGHTDB_WAIT_MS = 1000;
+const LIGHTDB_WAIT_ATTEMPTS = 30;
 
 export default class GymPlugin extends Plugin {
   settings: GymSettings = { ...DEFAULT_SETTINGS };
   exporter: LlmExporter | null = null;
+  private exporterStart: Promise<LlmExporter | null> | null = null;
 
   async onload(): Promise<void> {
     this.settings = await this.readSettings();
@@ -31,7 +35,7 @@ export default class GymPlugin extends Plugin {
     this.addRibbonIcon("dumbbell", "Gym: open workout", () => void this.openWorkout());
     this.addCommand({ id: "open-workout", name: "Open workout", callback: () => void this.openWorkout() });
     this.addSettingTab(new GymSettingTab(this.app, this));
-    this.app.workspace.onLayoutReady(() => void this.startExporter());
+    this.app.workspace.onLayoutReady(() => void this.ensureExporter());
   }
 
   onunload(): void {
@@ -45,11 +49,23 @@ export default class GymPlugin extends Plugin {
   async setExportPath(path: string): Promise<void> {
     this.settings.llmExportPath = path.trim();
     await this.saveData(this.settings);
-    await this.exporter?.run();
+    const exporter = await this.ensureExporter();
+    if (exporter) await exporter.run();
+    else new Notice("Gym: LightDB is not available, LLM export is off");
   }
 
-  private async startExporter(): Promise<void> {
+  private ensureExporter(): Promise<LlmExporter | null> {
+    if (this.exporter) return Promise.resolve(this.exporter);
+    this.exporterStart ??= this.startExporter().finally(() => (this.exporterStart = null));
+    return this.exporterStart;
+  }
+
+  private async startExporter(): Promise<LlmExporter | null> {
     try {
+      for (let attempt = 0; !lightDbApi(this.app); attempt++) {
+        if (attempt >= LIGHTDB_WAIT_ATTEMPTS) throw new Error("LightDB plugin is not loaded");
+        await new Promise((resolve) => window.setTimeout(resolve, LIGHTDB_WAIT_MS));
+      }
       const db = await openGymDb(this.app);
       const exporter = new LlmExporter(
         this.app.vault.adapter,
@@ -60,8 +76,10 @@ export default class GymPlugin extends Plugin {
       this.exporter = exporter;
       this.register(db.onChange(() => exporter.schedule()));
       exporter.schedule();
+      return exporter;
     } catch (error) {
       console.error("gym: LLM export is unavailable", error);
+      return null;
     }
   }
 
