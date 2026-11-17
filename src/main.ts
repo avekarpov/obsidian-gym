@@ -1,4 +1,4 @@
-import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from "obsidian";
 import { LlmExporter } from "./export";
 import { lightDbApi } from "./lightdb";
 import { LogBlock } from "./log";
@@ -53,6 +53,13 @@ export default class GymPlugin extends Plugin {
     this.registerEvent(this.app.vault.on("create", refreshNotes));
     this.registerEvent(this.app.vault.on("delete", refreshNotes));
     this.registerEvent(this.app.vault.on("rename", refreshNotes));
+    this.registerEvent(this.app.vault.on("rename", (item, oldPath) => {
+      const folder = this.root;
+      if (!folder || !(item instanceof TFolder)) return;
+      if (oldPath === folder || folder.startsWith(`${oldPath}/`)) {
+        void this.setGymFolder(item.path + folder.slice(oldPath.length));
+      }
+    }));
     this.registerEvent(this.app.metadataCache.on("changed", refreshNotes));
     this.registerEvent(this.app.metadataCache.on("resolved", refreshNotes));
 
@@ -61,6 +68,13 @@ export default class GymPlugin extends Plugin {
       void this.ensureStructure();
       void this.ensureExporter();
     });
+  }
+
+  async onExternalSettingsChange(): Promise<void> {
+    this.settings = await this.readSettings();
+    this.notes.rebuild();
+    void this.notes.assignMissingIds();
+    this.exporter?.schedule();
   }
 
   onunload(): void {
