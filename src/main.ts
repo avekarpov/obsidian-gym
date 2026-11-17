@@ -9,10 +9,11 @@ import { GymBlock } from "./view";
 
 interface GymSettings {
   gymFolder: string;
-  llmExportPath: string;
+  llmExport: boolean;
 }
 
-const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", llmExportPath: "" };
+const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", llmExport: false };
+const LLM_EXPORT_FILE = ".llm.json";
 const LIGHTDB_WAIT_MS = 1000;
 const LIGHTDB_WAIT_ATTEMPTS = 30;
 
@@ -64,7 +65,13 @@ export default class GymPlugin extends Plugin {
   }
 
   async readSettings(): Promise<GymSettings> {
-    return { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<GymSettings> | null) };
+    const data = (await this.loadData()) as Partial<GymSettings> | null;
+    return { gymFolder: data?.gymFolder ?? DEFAULT_SETTINGS.gymFolder, llmExport: data?.llmExport ?? DEFAULT_SETTINGS.llmExport };
+  }
+
+  private exportPath(settings: GymSettings): string {
+    const folder = settings.gymFolder.trim();
+    return settings.llmExport && folder ? normalizePath(`${folder}/${LLM_EXPORT_FILE}`) : "";
   }
 
   async setGymFolder(folder: string): Promise<void> {
@@ -72,11 +79,11 @@ export default class GymPlugin extends Plugin {
     await this.saveData(this.settings);
     await this.ensureStructure();
     this.notes.rebuild();
-    this.exporter?.schedule();
+    await this.exporter?.run();
   }
 
-  async setExportPath(path: string): Promise<void> {
-    this.settings.llmExportPath = path.trim();
+  async setLlmExport(enabled: boolean): Promise<void> {
+    this.settings.llmExport = enabled;
     await this.saveData(this.settings);
     const exporter = await this.ensureExporter();
     if (exporter) await exporter.run();
@@ -122,8 +129,8 @@ export default class GymPlugin extends Plugin {
         this.app.vault.adapter,
         db,
         this.notes,
-        async () => (await this.readSettings()).llmExportPath,
-        this.settings.llmExportPath,
+        async () => this.exportPath(await this.readSettings()),
+        this.exportPath(this.settings),
       );
       this.exporter = exporter;
       this.register(db.onChange(() => exporter.schedule()));
@@ -168,11 +175,10 @@ class GymSettingTab extends PluginSettingTab {
         text.inputEl.addEventListener("change", () => void this.plugin.setGymFolder(text.getValue()));
       });
     new Setting(containerEl)
-      .setName("LLM export path")
-      .setDesc("JSON file with the plan and all workouts for a chat bot. Empty means no export; clearing it deletes the file. Synced to all devices.")
-      .addText((text) => {
-        text.setPlaceholder("Gym/.llm.json").setValue(this.plugin.settings.llmExportPath);
-        text.inputEl.addEventListener("change", () => void this.plugin.setExportPath(text.getValue()));
-      });
+      .setName("LLM export")
+      .setDesc(`Keep ${LLM_EXPORT_FILE} with the plan and all workouts in the Gym folder for a chat bot. Turning it off deletes the file. Synced to all devices.`)
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.llmExport).onChange((value) => void this.plugin.setLlmExport(value)),
+      );
   }
 }
