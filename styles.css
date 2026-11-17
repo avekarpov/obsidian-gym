@@ -402,3 +402,11 @@
 .gym .gym-weight.is-dragging .gym-weight-number {
   color: var(--interactive-accent);
 }
+
+.metadata-property[data-property-key="gym-id"] {
+  display: none;
+}
+
+.metadata-container:has(.metadata-property[data-property-key="gym-id"]):not(:has(.metadata-property:not([data-property-key="gym-id"]))) {
+  display: none;
+}

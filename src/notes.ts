@@ -10,6 +10,7 @@ export class ExerciseNotes {
   private byId = new Map<string, TFile>();
   private listeners = new Set<() => void>();
   private signature = "";
+  private assigning = new Set<string>();
 
   constructor(private app: App, private gymFolder: () => string) {}
 
@@ -67,12 +68,29 @@ export class ExerciseNotes {
   async ensureId(file: TFile): Promise<string> {
     const existing = this.idOf(file);
     if (existing) return existing;
-    const id = newExerciseId();
+    const candidate = await this.idForPath(file.path);
+    let id = candidate;
     await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-      frontmatter[GYM_ID] = id;
+      const current = frontmatter[GYM_ID];
+      if (typeof current === "string" && current.trim()) id = current.trim();
+      else frontmatter[GYM_ID] = candidate;
     });
     this.byId.set(id, file);
     return id;
+  }
+
+  async assignMissingIds(): Promise<void> {
+    for (const file of this.files()) {
+      if (this.idOf(file) || this.assigning.has(file.path)) continue;
+      this.assigning.add(file.path);
+      try {
+        await this.ensureId(file);
+      } catch (error) {
+        console.error(`gym: cannot add ${GYM_ID} to ${file.path}`, error);
+      } finally {
+        this.assigning.delete(file.path);
+      }
+    }
   }
 
   async create(name: string): Promise<{ file: TFile; id: string }> {
@@ -81,7 +99,7 @@ export class ExerciseNotes {
     const path = this.pathFor(name);
     if (this.app.vault.getAbstractFileByPath(path)) throw new Error(`${path} already exists`);
     if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder);
-    const id = newExerciseId();
+    const id = await this.idForPath(path);
     const file = await this.app.vault.create(path, `---\n${GYM_ID}: ${id}\n---\n`);
     this.byId.set(id, file);
     return { file, id };
@@ -94,13 +112,17 @@ export class ExerciseNotes {
     await this.app.fileManager.renameFile(file, path);
   }
 
+  private async idForPath(path: string): Promise<string> {
+    const folder = this.folder;
+    const relative = folder && path.startsWith(`${folder}/`) ? path.slice(folder.length + 1) : path;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(relative));
+    const hex = [...new Uint8Array(digest)].slice(0, 4).map((b) => b.toString(16).padStart(2, "0")).join("");
+    return `ex_${hex}`;
+  }
+
   private pathFor(name: string, folder = this.folder): string {
     const clean = name.replace(FORBIDDEN, " ").replace(/\s+/g, " ").trim();
     if (!clean) throw new Error("Exercise name is empty");
     return normalizePath(`${folder}/${clean}.md`);
   }
-}
-
-function newExerciseId(): string {
-  return `ex_${crypto.randomUUID().slice(0, 8)}`;
 }

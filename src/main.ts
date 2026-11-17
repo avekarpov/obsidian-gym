@@ -46,7 +46,10 @@ export default class GymPlugin extends Plugin {
     this.addCommand({ id: "open-workout", name: "Open workout", callback: () => void this.openWorkout() });
     this.addSettingTab(new GymSettingTab(this.app, this));
 
-    const refreshNotes = () => this.notes.rebuild();
+    const refreshNotes = () => {
+      this.notes.rebuild();
+      void this.notes.assignMissingIds();
+    };
     this.registerEvent(this.app.vault.on("create", refreshNotes));
     this.registerEvent(this.app.vault.on("delete", refreshNotes));
     this.registerEvent(this.app.vault.on("rename", refreshNotes));
@@ -54,7 +57,7 @@ export default class GymPlugin extends Plugin {
     this.registerEvent(this.app.metadataCache.on("resolved", refreshNotes));
 
     this.app.workspace.onLayoutReady(() => {
-      this.notes.rebuild();
+      refreshNotes();
       void this.ensureStructure();
       void this.ensureExporter();
     });
@@ -79,6 +82,7 @@ export default class GymPlugin extends Plugin {
     await this.saveData(this.settings);
     await this.ensureStructure();
     this.notes.rebuild();
+    await this.notes.assignMissingIds();
     await this.exporter?.run();
   }
 
