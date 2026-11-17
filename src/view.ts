@@ -2,7 +2,7 @@ import { App, MarkdownRenderChild } from "obsidian";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { EXERCISE_NOTES_DIR } from "./program";
-import { bindWeightDrag, closeScale } from "./scale";
+import { bindWeightDrag } from "./scale";
 import { openGymDb } from "./schema";
 import {
   activeWorkout, buildSteps, defaultReps, defaultWeightG, doneKeys, Exercise, getWorkout,
@@ -28,7 +28,6 @@ export class GymBlock extends MarkdownRenderChild {
 
   async onload(): Promise<void> {
     this.containerEl.addClass("gym");
-    this.register(closeScale);
     try {
       const db = await openGymDb(this.app);
       this.db = db;
