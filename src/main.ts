@@ -1,6 +1,7 @@
 import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from "obsidian";
 import { LlmExporter } from "./export";
 import { lightDbApi } from "./lightdb";
+import { PlanLinks } from "./links";
 import { LogBlock } from "./log";
 import { currentLanguage, Language, LANGUAGES, setLanguage, structureNames, StructureNames, t } from "./i18n";
 import { ExerciseNotes } from "./notes";
@@ -28,6 +29,7 @@ const NOTES: { key: Exclude<keyof StructureNames, "exercises">; block: string }[
 export default class GymPlugin extends Plugin {
   settings: GymSettings = { ...DEFAULT_SETTINGS };
   exporter: LlmExporter | null = null;
+  planLinks: PlanLinks | null = null;
   notes!: ExerciseNotes;
   private exporterStart: Promise<LlmExporter | null> | null = null;
 
@@ -79,10 +81,12 @@ export default class GymPlugin extends Plugin {
     this.notes.rebuild();
     void this.notes.assignMissingIds();
     this.exporter?.schedule();
+    this.planLinks?.schedule();
   }
 
   onunload(): void {
     this.exporter?.cancel();
+    this.planLinks?.cancel();
   }
 
   async readSettings(): Promise<GymSettings> {
@@ -106,6 +110,7 @@ export default class GymPlugin extends Plugin {
     this.notes.rebuild();
     await this.notes.assignMissingIds();
     await this.exporter?.run();
+    this.planLinks?.schedule();
   }
 
   async setPluginLanguage(language: Language): Promise<void> {
@@ -115,6 +120,7 @@ export default class GymPlugin extends Plugin {
     await this.ensureStructure();
     this.notes.rebuild();
     await this.notes.assignMissingIds();
+    this.planLinks?.schedule();
   }
 
   async setUseLlm(enabled: boolean): Promise<void> {
@@ -180,6 +186,15 @@ export default class GymPlugin extends Plugin {
       this.register(db.onChange(() => exporter.schedule()));
       this.register(this.notes.onChange(() => exporter.schedule()));
       exporter.schedule();
+
+      const planLinks = new PlanLinks(this.app, db, this.notes, () => {
+        const root = this.root;
+        return root ? `${root}/${structureNames().plan}` : null;
+      });
+      this.planLinks = planLinks;
+      this.register(db.onChange(() => planLinks.schedule()));
+      this.register(this.notes.onChange(() => planLinks.schedule()));
+      planLinks.schedule();
       return exporter;
     } catch (error) {
       console.error("gym: LLM export is unavailable", error);

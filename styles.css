@@ -403,10 +403,11 @@
   color: var(--interactive-accent);
 }
 
-.metadata-property[data-property-key="gym-id"] {
+.metadata-property[data-property-key="gym-id"],
+.metadata-property[data-property-key="gym-exercises"] {
   display: none;
 }
 
-.metadata-container:has(.metadata-property[data-property-key="gym-id"]):not(:has(.metadata-property:not([data-property-key="gym-id"]))) {
+.metadata-container:has(.metadata-property[data-property-key^="gym-"]):not(:has(.metadata-property:not([data-property-key^="gym-"]))) {
   display: none;
 }
