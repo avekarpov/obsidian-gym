@@ -4,6 +4,7 @@ import { ExerciseNotes } from "./notes";
 import { loadSchemes } from "./workout";
 
 export const PLAN_LINKS = "gym-exercises";
+export const PLAN_LINK = "gym-plan";
 
 const DEBOUNCE_MS = 1000;
 
@@ -15,6 +16,7 @@ export class PlanLinks {
     private db: LightDb,
     private notes: ExerciseNotes,
     private planPath: () => string | null,
+    private linkedNotes: () => string[],
   ) {}
 
   schedule(): void {
@@ -37,11 +39,21 @@ export class PlanLinks {
       if (!(file instanceof TFile)) return;
       const wanted = this.links();
       const current: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[PLAN_LINKS];
-      if (sameList(current, wanted)) return;
-      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-        if (wanted.length) frontmatter[PLAN_LINKS] = wanted;
-        else delete frontmatter[PLAN_LINKS];
-      });
+      if (!sameList(current, wanted)) {
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+          if (wanted.length) frontmatter[PLAN_LINKS] = wanted;
+          else delete frontmatter[PLAN_LINKS];
+        });
+      }
+      const planLink = link(file);
+      for (const notePath of this.linkedNotes()) {
+        const note = this.app.vault.getAbstractFileByPath(notePath);
+        if (!(note instanceof TFile)) continue;
+        if (this.app.metadataCache.getFileCache(note)?.frontmatter?.[PLAN_LINK] === planLink) continue;
+        await this.app.fileManager.processFrontMatter(note, (frontmatter: Record<string, unknown>) => {
+          frontmatter[PLAN_LINK] = planLink;
+        });
+      }
     } catch (error) {
       console.error("gym: cannot update plan links", error);
     }
@@ -53,12 +65,16 @@ export class PlanLinks {
       for (const id of scheme.exercises) {
         const note = this.notes.file(id);
         if (!note) continue;
-        const link = `[[${note.path.replace(/\.md$/, "")}|${note.basename}]]`;
-        if (!links.includes(link)) links.push(link);
+        const noteLink = link(note);
+        if (!links.includes(noteLink)) links.push(noteLink);
       }
     }
     return links;
   }
+}
+
+function link(file: TFile): string {
+  return `[[${file.path.replace(/\.md$/, "")}|${file.basename}]]`;
 }
 
 function sameList(current: unknown, wanted: string[]): boolean {

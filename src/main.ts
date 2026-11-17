@@ -187,10 +187,13 @@ export default class GymPlugin extends Plugin {
       this.register(this.notes.onChange(() => exporter.schedule()));
       exporter.schedule();
 
-      const planLinks = new PlanLinks(this.app, db, this.notes, () => {
-        const root = this.root;
-        return root ? `${root}/${structureNames().plan}` : null;
-      });
+      const planLinks = new PlanLinks(
+        this.app,
+        db,
+        this.notes,
+        () => (this.root ? `${this.root}/${structureNames().plan}` : null),
+        () => (this.root ? [structureNames().workout, structureNames().log].map((name) => `${this.root}/${name}`) : []),
+      );
       this.planLinks = planLinks;
       this.register(db.onChange(() => planLinks.schedule()));
       this.register(this.notes.onChange(() => planLinks.schedule()));

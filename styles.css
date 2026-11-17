@@ -403,8 +403,7 @@
   color: var(--interactive-accent);
 }
 
-.metadata-property[data-property-key="gym-id"],
-.metadata-property[data-property-key="gym-exercises"] {
+.metadata-property[data-property-key^="gym-"] {
   display: none;
 }
 
