@@ -1,4 +1,4 @@
-import { LightDb, OpInput } from "./lightdb";
+import { LightDb } from "./lightdb";
 
 export interface Exercise {
   id: string;
@@ -6,7 +6,6 @@ export interface Exercise {
   note: string | null;
   sets: number;
   reps: number | null;
-  weightG: number | null;
 }
 
 export interface Scheme {
@@ -31,14 +30,8 @@ export interface Workout {
   currentExercise: string | null;
 }
 
-export interface RecordedSet {
-  exerciseId: string;
-  grams: number;
-  skipped: boolean;
-}
-
 export function loadExercises(db: LightDb): Map<string, Exercise> {
-  const rows = db.all(`SELECT e.id, e.name, e.note, p.sets, p.reps, p.weight_g
+  const rows = db.all(`SELECT e.id, e.name, e.note, p.sets, p.reps
     FROM exercises e JOIN plan p ON p.id = e.id`);
   return new Map(rows.map((r) => [r.id as string, {
     id: r.id as string,
@@ -46,7 +39,6 @@ export function loadExercises(db: LightDb): Map<string, Exercise> {
     note: r.note as string | null,
     sets: r.sets as number,
     reps: r.reps as number | null,
-    weightG: r.weight_g as number | null,
   }]));
 }
 
@@ -131,29 +123,33 @@ export function pickStep(steps: Step[], done: Set<string>, preferExercise: strin
   return open.find((s) => s.exercise.id === preferExercise) ?? open[0] ?? null;
 }
 
-export function defaultWeightG(db: LightDb, workoutId: string, exercise: Exercise): number {
-  const last = db.all(
-    "SELECT weight_g FROM sets WHERE workout_id = ? AND exercise_id = ? AND skipped = 0 ORDER BY done_at DESC LIMIT 1",
-    [workoutId, exercise.id],
-  )[0];
-  return (last?.weight_g as number | undefined) ?? exercise.weightG ?? 0;
+export interface Start {
+  grams: number;
+  reps: number;
 }
 
-export function defaultReps(db: LightDb, workoutId: string, exercise: Exercise): number {
-  const last = db.all(
-    "SELECT reps FROM sets WHERE workout_id = ? AND exercise_id = ? AND skipped = 0 AND reps IS NOT NULL ORDER BY done_at DESC LIMIT 1",
-    [workoutId, exercise.id],
+export function previousBest(db: LightDb, exerciseId: string, excludeWorkout: string): { grams: number; reps: number | null } | null {
+  const row = db.all(
+    `SELECT s.weight_g, s.reps FROM sets s
+     WHERE s.exercise_id = ? AND s.skipped = 0 AND s.workout_id = (
+       SELECT s2.workout_id FROM sets s2 JOIN workouts w ON w.id = s2.workout_id
+       WHERE s2.exercise_id = ? AND s2.skipped = 0 AND s2.workout_id != ?
+       ORDER BY w.started_at DESC LIMIT 1)
+     ORDER BY s.weight_g DESC, s.reps DESC LIMIT 1`,
+    [exerciseId, exerciseId, excludeWorkout],
   )[0];
-  return (last?.reps as number | undefined) ?? exercise.reps ?? 10;
+  return row ? { grams: row.weight_g as number, reps: row.reps as number | null } : null;
 }
 
-export function planWeightUpdates(db: LightDb, workoutId: string, pending: RecordedSet[]): OpInput[] {
-  const last = new Map<string, number>();
-  for (const r of db.all("SELECT exercise_id, weight_g FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [workoutId])) {
-    last.set(r.exercise_id as string, r.weight_g as number);
-  }
-  for (const set of pending) if (!set.skipped) last.set(set.exerciseId, set.grams);
-  return [...last].map(([exerciseId, grams]) => ({ op: "put", table: "plan", row: exerciseId, fields: { weight_g: grams } }));
+export function startValues(db: LightDb, workoutId: string, exercise: Exercise): Start {
+  const target = exercise.reps ?? 10;
+  const current = db.all(
+    "SELECT weight_g, reps FROM sets WHERE workout_id = ? AND exercise_id = ? AND skipped = 0 ORDER BY done_at DESC LIMIT 1",
+    [workoutId, exercise.id],
+  )[0];
+  if (current) return { grams: current.weight_g as number, reps: (current.reps as number | null) ?? target };
+  const best = previousBest(db, exercise.id, workoutId);
+  return best ? { grams: best.grams, reps: best.reps ?? target } : { grams: 0, reps: target };
 }
 
 export function workSetCount(db: LightDb, workoutId: string): number {

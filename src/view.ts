@@ -5,8 +5,8 @@ import { ExerciseNotes } from "./notes";
 import { bindWeightDrag } from "./scale";
 import { openGymDb } from "./schema";
 import {
-  activeWorkout, buildSteps, defaultReps, defaultWeightG, doneKeys, Exercise, getWorkout,
-  lastAction, loadExercises, loadSchemes, pickStep, planWeightUpdates, Scheme, Step, stepKey, Workout, workSetCount,
+  activeWorkout, buildSteps, doneKeys, Exercise, getWorkout,
+  lastAction, loadExercises, loadSchemes, pickStep, Scheme, startValues, Step, stepKey, Workout, workSetCount,
 } from "./workout";
 
 type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
@@ -102,16 +102,13 @@ export class GymBlock extends MarkdownRenderChild {
     const done = doneKeys(db, workoutId);
     const step = pickStep(steps, done, workout.currentExercise);
     if (!step) {
-      void this.run((db) => db.transaction([
-        { op: "put", table: "workouts", row: workoutId, fields: { finished_at: new Date().toISOString() } },
-        ...planWeightUpdates(db, workoutId, []),
-      ]));
+      void this.run((db) => db.put("workouts", workoutId, { finished_at: new Date().toISOString() }));
       return;
     }
     if (this.switching) return this.renderSwitch(root, steps, done, step, workoutId);
     const key = stepKey(step);
     if (this.weight?.key !== key) {
-      this.weight = { key, grams: defaultWeightG(db, workoutId, step.exercise), reps: defaultReps(db, workoutId, step.exercise) };
+      this.weight = { key, ...startValues(db, workoutId, step.exercise) };
     }
     const weight = this.weight;
 
@@ -171,7 +168,6 @@ export class GymBlock extends MarkdownRenderChild {
       const recorded = new Set(toRecord.map(stepKey));
       const finished = steps.every((s) => done.has(stepKey(s)) || recorded.has(stepKey(s)));
       const now = new Date().toISOString();
-      const pending = toRecord.map((s) => ({ exerciseId: s.exercise.id, grams: weight.grams, skipped }));
       await db.transaction([
         ...toRecord.map((s) => ({
           op: "put" as const, table: "sets", row: crypto.randomUUID(), fields: {
@@ -179,10 +175,7 @@ export class GymBlock extends MarkdownRenderChild {
             kind: "work", weight_g: weight.grams, reps: skipped ? null : weight.reps, done_at: now, skipped: skipped ? 1 : 0,
           },
         })),
-        ...(finished ? [
-          { op: "put" as const, table: "workouts", row: workoutId, fields: { finished_at: now } },
-          ...planWeightUpdates(db, workoutId, pending),
-        ] : []),
+        ...(finished ? [{ op: "put" as const, table: "workouts", row: workoutId, fields: { finished_at: now } }] : []),
       ]);
       if (finished) this.mode = { kind: "finished", workoutId };
     });
@@ -209,7 +202,7 @@ export class GymBlock extends MarkdownRenderChild {
         this.weight = {
           key: `${last.exerciseId}:${last.setNo}`,
           grams: last.grams,
-          reps: last.reps ?? defaultReps(db, workoutId, this.exercises.get(last.exerciseId)!),
+          reps: last.reps ?? this.exercises.get(last.exerciseId)?.reps ?? 10,
         };
       });
     };
@@ -231,10 +224,7 @@ export class GymBlock extends MarkdownRenderChild {
       if (!window.confirm("End the workout now?")) return;
       void this.run(async (db) => {
         this.mode = { kind: "finished", workoutId };
-        await db.transaction([
-          { op: "put", table: "workouts", row: workoutId, fields: { finished_at: new Date().toISOString() } },
-          ...planWeightUpdates(db, workoutId, []),
-        ]);
+        await db.put("workouts", workoutId, { finished_at: new Date().toISOString() });
       });
     };
   }
