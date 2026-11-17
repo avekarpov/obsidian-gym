@@ -106,11 +106,12 @@ export interface LastAction {
   exerciseId: string;
   setNo: number;
   grams: number;
+  reps: number | null;
 }
 
 export function lastAction(db: LightDb, workoutId: string): LastAction | null {
   const rows = db.all(
-    `SELECT id, exercise_id, set_no, weight_g FROM sets
+    `SELECT id, exercise_id, set_no, weight_g, reps FROM sets
      WHERE workout_id = ? AND done_at = (SELECT max(done_at) FROM sets WHERE workout_id = ?)
      ORDER BY set_no`,
     [workoutId, workoutId],
@@ -121,6 +122,7 @@ export function lastAction(db: LightDb, workoutId: string): LastAction | null {
     exerciseId: rows[0].exercise_id as string,
     setNo: rows[0].set_no as number,
     grams: rows[0].weight_g as number,
+    reps: rows[0].reps as number | null,
   };
 }
 
@@ -135,6 +137,14 @@ export function defaultWeightG(db: LightDb, workoutId: string, exercise: Exercis
     [workoutId, exercise.id],
   )[0];
   return (last?.weight_g as number | undefined) ?? exercise.weightG ?? 0;
+}
+
+export function defaultReps(db: LightDb, workoutId: string, exercise: Exercise): number {
+  const last = db.all(
+    "SELECT reps FROM sets WHERE workout_id = ? AND exercise_id = ? AND skipped = 0 AND reps IS NOT NULL ORDER BY done_at DESC LIMIT 1",
+    [workoutId, exercise.id],
+  )[0];
+  return (last?.reps as number | undefined) ?? exercise.reps ?? 10;
 }
 
 export function planWeightUpdates(db: LightDb, workoutId: string, pending: RecordedSet[]): OpInput[] {

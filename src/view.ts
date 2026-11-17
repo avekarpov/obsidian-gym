@@ -5,7 +5,7 @@ import { EXERCISE_NOTES_DIR } from "./program";
 import { bindWeightDrag, closeScale } from "./scale";
 import { openGymDb } from "./schema";
 import {
-  activeWorkout, buildSteps, defaultWeightG, doneKeys, Exercise, getWorkout,
+  activeWorkout, buildSteps, defaultReps, defaultWeightG, doneKeys, Exercise, getWorkout,
   lastAction, loadExercises, loadSchemes, pickStep, planWeightUpdates, Scheme, Step, stepKey, Workout, workSetCount,
 } from "./workout";
 
@@ -16,7 +16,7 @@ export class GymBlock extends MarkdownRenderChild {
   private exercises = new Map<string, Exercise>();
   private schemes: Scheme[] = [];
   private mode: Mode = { kind: "idle" };
-  private weight: { key: string; grams: number } | null = null;
+  private weight: { key: string; grams: number; reps: number } | null = null;
   private dragging = false;
   private renderPending = false;
   private busy = false;
@@ -109,7 +109,9 @@ export class GymBlock extends MarkdownRenderChild {
     }
     if (this.switching) return this.renderSwitch(root, steps, done, step, workoutId);
     const key = stepKey(step);
-    if (this.weight?.key !== key) this.weight = { key, grams: defaultWeightG(db, workoutId, step.exercise) };
+    if (this.weight?.key !== key) {
+      this.weight = { key, grams: defaultWeightG(db, workoutId, step.exercise), reps: defaultReps(db, workoutId, step.exercise) };
+    }
     const weight = this.weight;
 
     const header = root.createDiv({ cls: "gym-header" });
@@ -142,6 +144,26 @@ export class GymBlock extends MarkdownRenderChild {
       },
     });
 
+    const repsRow = root.createDiv({ cls: "gym-reps-row" });
+    const minus = repsRow.createEl("button", { cls: "gym-reps-button", text: "−" });
+    const repsValue = repsRow.createDiv({ cls: "gym-reps" });
+    const plus = repsRow.createEl("button", { cls: "gym-reps-button", text: "+" });
+    const showReps = () => {
+      repsValue.empty();
+      repsValue.createSpan({ cls: "gym-reps-number", text: String(weight.reps) });
+      repsValue.createSpan({ cls: "gym-weight-unit", text: "reps" });
+      minus.disabled = weight.reps <= 1;
+    };
+    showReps();
+    minus.onclick = () => {
+      weight.reps = Math.max(1, weight.reps - 1);
+      showReps();
+    };
+    plus.onclick = () => {
+      weight.reps += 1;
+      showReps();
+    };
+
     const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
     const record = (toRecord: Step[], skipped: boolean) => this.run(async (db) => {
       const recorded = new Set(toRecord.map(stepKey));
@@ -152,7 +174,7 @@ export class GymBlock extends MarkdownRenderChild {
         ...toRecord.map((s) => ({
           op: "put" as const, table: "sets", row: crypto.randomUUID(), fields: {
             workout_id: workoutId, exercise_id: s.exercise.id, set_no: s.setNo,
-            kind: "work", weight_g: weight.grams, done_at: now, skipped: skipped ? 1 : 0,
+            kind: "work", weight_g: weight.grams, reps: skipped ? null : weight.reps, done_at: now, skipped: skipped ? 1 : 0,
           },
         })),
         ...(finished ? [
@@ -182,7 +204,11 @@ export class GymBlock extends MarkdownRenderChild {
           ...last.setIds.map((id) => ({ op: "delete" as const, table: "sets", row: id })),
           { op: "put" as const, table: "workouts", row: workoutId, fields: { current_exercise: last.exerciseId } },
         ]);
-        this.weight = { key: `${last.exerciseId}:${last.setNo}`, grams: last.grams };
+        this.weight = {
+          key: `${last.exerciseId}:${last.setNo}`,
+          grams: last.grams,
+          reps: last.reps ?? defaultReps(db, workoutId, this.exercises.get(last.exerciseId)!),
+        };
       });
     };
     extra.createEl("button", { text: "Change exercise" }).onclick = () => {
@@ -270,7 +296,7 @@ export class GymBlock extends MarkdownRenderChild {
 }
 
 function setLabel(step: Step): string {
-  const reps = step.exercise.reps === null ? "" : ` · ${step.exercise.reps} reps`;
+  const reps = step.exercise.reps === null ? "" : ` · target ${step.exercise.reps} reps`;
   return `Set ${step.setNo} of ${step.exercise.sets}${reps}`;
 }
 

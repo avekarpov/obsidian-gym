@@ -170,15 +170,15 @@ export class LogBlock extends MarkdownRenderChild {
         void this.deleteWorkout(db, id);
       };
 
-      const sets = db.all("SELECT exercise_id, kind, weight_g FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [id]);
+      const sets = db.all("SELECT exercise_id, kind, weight_g, reps FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [id]);
       if (!sets.length) {
         details.createDiv({ cls: "gym-muted", text: "No sets" });
         continue;
       }
-      const byExercise = new Map<string, { kind: string; grams: number }[]>();
+      const byExercise = new Map<string, { kind: string; grams: number; reps: number | null }[]>();
       for (const s of sets) {
         const list = byExercise.get(s.exercise_id as string) ?? [];
-        list.push({ kind: s.kind as string, grams: s.weight_g as number });
+        list.push({ kind: s.kind as string, grams: s.weight_g as number, reps: s.reps as number | null });
         byExercise.set(s.exercise_id as string, list);
       }
       const list = details.createDiv({ cls: "gym-workout-sets" });
@@ -188,7 +188,8 @@ export class LogBlock extends MarkdownRenderChild {
         const weights = row.createSpan({ cls: "gym-num" });
         items.forEach((item, i) => {
           if (i > 0) weights.createSpan({ cls: "gym-muted", text: " · " });
-          weights.createSpan({ cls: item.kind === "warmup" ? "gym-muted" : "", text: formatKg(item.grams) });
+          const text = item.reps === null ? formatKg(item.grams) : `${formatKg(item.grams)}×${item.reps}`;
+          weights.createSpan({ cls: item.kind === "warmup" ? "gym-muted" : "", text });
         });
       }
     }
