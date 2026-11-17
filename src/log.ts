@@ -1,6 +1,7 @@
 import { App, MarkdownRenderChild, Notice } from "obsidian";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
+import { ExerciseNotes } from "./notes";
 import { openGymDb } from "./schema";
 import { horizontalScroll } from "./scroll";
 import { Exercise, loadExercises, loadSchemes } from "./workout";
@@ -18,7 +19,7 @@ interface Point {
 export class LogBlock extends MarkdownRenderChild {
   private open = new Set<string>();
 
-  constructor(containerEl: HTMLElement, private app: App) {
+  constructor(containerEl: HTMLElement, private app: App, private notes: ExerciseNotes) {
     super(containerEl);
   }
 
@@ -27,6 +28,7 @@ export class LogBlock extends MarkdownRenderChild {
     try {
       const db = await openGymDb(this.app);
       this.register(db.onChange(() => this.render(db)));
+      this.register(this.notes.onChange(() => this.render(db)));
       this.render(db);
     } catch (error) {
       this.error(error);
@@ -42,6 +44,7 @@ export class LogBlock extends MarkdownRenderChild {
     try {
       const root = this.containerEl;
       const exercises = loadExercises(db);
+      this.notes.decorate(exercises);
       root.empty();
       root.createEl("h2", { text: "Progress" });
       this.renderProgress(root, db, exercises);

@@ -52,4 +52,3 @@ export const SCHEME_SEED: { id: string; name: string; exercises: string[] }[] = 
   },
 ];
 
-export const EXERCISE_NOTES_DIR = "Зал/Упражнения";

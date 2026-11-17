@@ -1,6 +1,6 @@
-import { App, MarkdownRenderChild, Notice } from "obsidian";
+import { App, MarkdownRenderChild, Notice, TFile } from "obsidian";
 import { LightDb } from "./lightdb";
-import { EXERCISE_NOTES_DIR } from "./program";
+import { ExerciseNotes } from "./notes";
 import { openGymDb } from "./schema";
 import { horizontalScroll } from "./scroll";
 import { Exercise, loadExercises, loadSchemes, Scheme } from "./workout";
@@ -15,7 +15,7 @@ interface Draft {
 
 interface NewExercise {
   schemeId: string;
-  existingId: string;
+  notePath: string;
   name: string;
   sets: string;
   reps: string;
@@ -27,7 +27,7 @@ export class PlanBlock extends MarkdownRenderChild {
   private adding: NewExercise | null = null;
   private saving = false;
 
-  constructor(containerEl: HTMLElement, private app: App) {
+  constructor(containerEl: HTMLElement, private app: App, private notes: ExerciseNotes) {
     super(containerEl);
   }
 
@@ -37,6 +37,7 @@ export class PlanBlock extends MarkdownRenderChild {
       const db = await openGymDb(this.app);
       this.db = db;
       this.register(db.onChange(() => this.render()));
+      this.register(this.notes.onChange(() => this.render()));
       this.render();
     } catch (error) {
       this.error(error);
@@ -54,6 +55,7 @@ export class PlanBlock extends MarkdownRenderChild {
     const root = this.containerEl;
     try {
       const exercises = loadExercises(db);
+      this.notes.decorate(exercises);
       const schemes = loadSchemes(db);
       root.empty();
       for (const scheme of schemes) {
@@ -68,12 +70,12 @@ export class PlanBlock extends MarkdownRenderChild {
           if (this.draft?.schemeId === scheme.id && this.draft.exerciseId === id) this.renderEditor(body, db, scheme, exercise, this.draft);
           else this.renderRow(body, scheme, exercise);
         }
-        if (this.adding?.schemeId === scheme.id) this.renderAdd(root, db, scheme, exercises, this.adding);
+        if (this.adding?.schemeId === scheme.id) this.renderAdd(root, db, scheme, this.adding);
         else {
           root.createEl("button", { cls: "gym-plan-add", text: "Add exercise" }).onclick = () => {
             this.draft = null;
             this.adding = {
-              schemeId: scheme.id, existingId: "", name: "",
+              schemeId: scheme.id, notePath: "", name: "",
               sets: "3", reps: "12",
             };
             this.render();
@@ -143,6 +145,9 @@ export class PlanBlock extends MarkdownRenderChild {
         return;
       }
       void this.act(async () => {
+        const note = exercise.note;
+        const file = note ? this.app.vault.getAbstractFileByPath(note) : null;
+        if (file instanceof TFile) await this.notes.rename(file, newName);
         await db.transaction([
           { op: "put", table: "exercises", row: draft.exerciseId, fields: { name: newName } },
           { op: "put", table: "plan", row: draft.exerciseId, fields: plan },
@@ -152,7 +157,7 @@ export class PlanBlock extends MarkdownRenderChild {
     };
   }
 
-  private renderAdd(root: HTMLElement, db: LightDb, scheme: Scheme, exercises: Map<string, Exercise>, form: NewExercise): void {
+  private renderAdd(root: HTMLElement, db: LightDb, scheme: Scheme, form: NewExercise): void {
     const box = root.createDiv({ cls: "gym-plan-new" });
     box.createDiv({ cls: "gym-plan-edit-name", text: `Add exercise to ${scheme.name}` });
 
@@ -160,33 +165,25 @@ export class PlanBlock extends MarkdownRenderChild {
     pickField.createSpan({ text: "Exercise" });
     const pick = pickField.createEl("select", { cls: "dropdown" });
     pick.createEl("option", { text: "New exercise", value: "" });
-    const available = [...exercises.values()]
-      .filter((e) => !scheme.exercises.includes(e.id))
-      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
-    for (const e of available) pick.createEl("option", { text: e.name, value: e.id });
-    pick.value = form.existingId;
+    for (const file of this.notes.files()) {
+      const id = this.notes.idOf(file);
+      if (id && scheme.exercises.includes(id)) continue;
+      pick.createEl("option", { text: file.basename, value: file.path });
+    }
+    pick.value = form.notePath;
     pick.onchange = () => {
-      form.existingId = pick.value;
+      form.notePath = pick.value;
       this.render();
     };
 
-    if (!form.existingId) {
+    if (!form.notePath) {
       const nameField = box.createEl("label", { cls: "gym-plan-field" });
       nameField.createSpan({ text: "Name" });
-      const name = nameField.createEl("input", { type: "text", attr: { placeholder: "Подтягивания" } });
+      const name = nameField.createEl("input", { type: "text", attr: { placeholder: "Pull-ups" } });
       name.value = form.name;
       name.oninput = () => (form.name = name.value);
-
-      this.planFields(box.createDiv({ cls: "gym-plan-fields" }), form);
-    } else {
-      const existing = exercises.get(form.existingId);
-      if (existing) {
-        box.createDiv({
-          cls: "gym-muted",
-          text: `${existing.sets} × ${existing.reps ?? "—"}. Edit the plan after adding.`,
-        });
-      }
     }
+    this.planFields(box.createDiv({ cls: "gym-plan-fields" }), form);
 
     const actions = box.createDiv({ cls: "gym-plan-actions" });
     actions.createDiv({ cls: "gym-plan-spacer" });
@@ -195,28 +192,31 @@ export class PlanBlock extends MarkdownRenderChild {
       this.render();
     };
     actions.createEl("button", { cls: "gym-primary", text: "Add" }).onclick = () => {
-      const position = nextPosition(db, scheme.id);
-      if (form.existingId) {
-        const exerciseId = form.existingId;
-        void this.act(async () => {
-          await db.put("scheme_exercises", `${scheme.id}:${exerciseId}`, { scheme_id: scheme.id, exercise_id: exerciseId, position });
-          this.adding = null;
-        });
-        return;
-      }
+      const plan = parsePlan(form);
+      if (!plan) return;
       const name = form.name.trim();
-      if (!name) {
+      if (!form.notePath && !name) {
         new Notice("Gym: enter a name");
         return;
       }
-      const plan = parsePlan(form);
-      if (!plan) return;
-      const exerciseId = `ex_${crypto.randomUUID().slice(0, 8)}`;
       void this.act(async () => {
+        let id: string;
+        let title: string;
+        if (form.notePath) {
+          const file = this.app.vault.getAbstractFileByPath(form.notePath);
+          if (!(file instanceof TFile)) throw new Error(`${form.notePath} not found`);
+          id = await this.notes.ensureId(file);
+          title = file.basename;
+        } else {
+          const created = await this.notes.create(name);
+          id = created.id;
+          title = created.file.basename;
+        }
+        const known = db.all("SELECT 1 FROM exercises WHERE id = ?", [id]).length > 0;
         await db.transaction([
-          { op: "put", table: "exercises", row: exerciseId, fields: { name, note: null, per_side: 0 } },
-          { op: "put", table: "plan", row: exerciseId, fields: plan },
-          { op: "put", table: "scheme_exercises", row: `${scheme.id}:${exerciseId}`, fields: { scheme_id: scheme.id, exercise_id: exerciseId, position } },
+          ...(known ? [] : [{ op: "put" as const, table: "exercises", row: id, fields: { name: title, note: null, per_side: 0 } }]),
+          { op: "put", table: "plan", row: id, fields: plan },
+          { op: "put", table: "scheme_exercises", row: `${scheme.id}:${id}`, fields: { scheme_id: scheme.id, exercise_id: id, position: nextPosition(db, scheme.id) } },
         ]);
         this.adding = null;
       });
@@ -268,7 +268,7 @@ export class PlanBlock extends MarkdownRenderChild {
       el.setText(exercise.name);
       return;
     }
-    const target = `${EXERCISE_NOTES_DIR}/${exercise.note}`;
+    const target = exercise.note;
     const link = el.createEl("a", { cls: "internal-link", text: exercise.name, attr: { "data-href": target, href: target } });
     link.onclick = (event) => {
       event.preventDefault();

@@ -1,7 +1,7 @@
 import { App, MarkdownRenderChild } from "obsidian";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
-import { EXERCISE_NOTES_DIR } from "./program";
+import { ExerciseNotes } from "./notes";
 import { bindWeightDrag } from "./scale";
 import { openGymDb } from "./schema";
 import {
@@ -22,7 +22,7 @@ export class GymBlock extends MarkdownRenderChild {
   private busy = false;
   private switching = false;
 
-  constructor(containerEl: HTMLElement, private app: App) {
+  constructor(containerEl: HTMLElement, private app: App, private notes: ExerciseNotes) {
     super(containerEl);
   }
 
@@ -32,6 +32,7 @@ export class GymBlock extends MarkdownRenderChild {
       const db = await openGymDb(this.app);
       this.db = db;
       this.register(db.onChange(() => this.render()));
+      this.register(this.notes.onChange(() => this.render()));
       this.render();
     } catch (error) {
       this.message(error instanceof Error ? error.message : String(error));
@@ -53,6 +54,7 @@ export class GymBlock extends MarkdownRenderChild {
     const root = this.containerEl;
     try {
       this.exercises = loadExercises(db);
+      this.notes.decorate(this.exercises);
       this.schemes = loadSchemes(db);
     } catch (error) {
       this.message(error instanceof Error ? error.message : String(error));
@@ -118,9 +120,10 @@ export class GymBlock extends MarkdownRenderChild {
     header.createSpan({ text: `started ${formatTime(startedAt)}` });
 
     const name = root.createDiv({ cls: "gym-exercise", text: step.exercise.name });
-    if (step.exercise.note) {
+    const note = step.exercise.note;
+    if (note) {
       name.addClass("gym-link");
-      name.onclick = () => void this.app.workspace.openLinkText(`${EXERCISE_NOTES_DIR}/${step.exercise.note}`, "", false);
+      name.onclick = () => void this.app.workspace.openLinkText(note, "", false);
     }
     root.createDiv({ cls: "gym-set", text: setLabel(step) });
 
