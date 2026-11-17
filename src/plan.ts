@@ -1,4 +1,5 @@
 import { App, MarkdownRenderChild, Notice, TFile } from "obsidian";
+import { onLanguageChange, t } from "./i18n";
 import { LightDb } from "./lightdb";
 import { ExerciseNotes } from "./notes";
 import { openGymDb } from "./schema";
@@ -38,6 +39,7 @@ export class PlanBlock extends MarkdownRenderChild {
       this.db = db;
       this.register(db.onChange(() => this.render()));
       this.register(this.notes.onChange(() => this.render()));
+      this.register(onLanguageChange(() => this.render()));
       this.render();
     } catch (error) {
       this.error(error);
@@ -62,7 +64,7 @@ export class PlanBlock extends MarkdownRenderChild {
         root.createEl("h2", { text: scheme.name });
         const table = horizontalScroll(root).createEl("table");
         const head = table.createEl("thead").createEl("tr");
-        for (const title of ["Exercise", "Sets", "Reps"]) head.createEl("th", { text: title });
+        for (const title of ["Exercise", "Sets", "Reps"]) head.createEl("th", { text: t(title) });
         const body = table.createEl("tbody");
         for (const id of scheme.exercises) {
           const exercise = exercises.get(id);
@@ -72,7 +74,7 @@ export class PlanBlock extends MarkdownRenderChild {
         }
         if (this.adding?.schemeId === scheme.id) this.renderAdd(root, db, scheme, this.adding);
         else {
-          root.createEl("button", { cls: "gym-plan-add", text: "Add exercise" }).onclick = () => {
+          root.createEl("button", { cls: "gym-plan-add", text: t("Add exercise") }).onclick = () => {
             this.draft = null;
             this.adding = {
               schemeId: scheme.id, notePath: "", name: "",
@@ -109,7 +111,7 @@ export class PlanBlock extends MarkdownRenderChild {
     const cell = body.createEl("tr", { cls: "gym-plan-edit" }).createEl("td", { attr: { colspan: "3" } });
     this.renderName(cell.createDiv({ cls: "gym-plan-edit-name" }), exercise);
     const nameField = cell.createEl("label", { cls: "gym-plan-field" });
-    nameField.createSpan({ text: "Name" });
+    nameField.createSpan({ text: t("Name") });
     const name = nameField.createEl("input", { cls: "gym-plan-name", type: "text" });
     name.value = draft.name;
     name.oninput = () => (draft.name = name.value);
@@ -124,24 +126,24 @@ export class PlanBlock extends MarkdownRenderChild {
     const down = actions.createEl("button", { text: "↓" });
     down.disabled = index >= scheme.exercises.length - 1;
     down.onclick = () => void this.act(() => this.move(db, scheme, exercise.id, 1));
-    actions.createEl("button", { cls: "mod-warning", text: "Remove from group" }).onclick = () => {
-      if (!window.confirm(`Remove "${exercise.name}" from ${scheme.name}? History is kept.`)) return;
+    actions.createEl("button", { cls: "mod-warning", text: t("Remove from group") }).onclick = () => {
+      if (!window.confirm(t("Remove \"{name}\" from {group}? History is kept.", { name: exercise.name, group: scheme.name }))) return;
       void this.act(async () => {
         await db.delete("scheme_exercises", `${scheme.id}:${exercise.id}`);
         this.draft = null;
       });
     };
     actions.createDiv({ cls: "gym-plan-spacer" });
-    actions.createEl("button", { text: "Cancel" }).onclick = () => {
+    actions.createEl("button", { text: t("Cancel") }).onclick = () => {
       this.draft = null;
       this.render();
     };
-    actions.createEl("button", { cls: "gym-primary", text: "Save" }).onclick = () => {
+    actions.createEl("button", { cls: "gym-primary", text: t("Save") }).onclick = () => {
       const plan = parsePlan(draft);
       if (!plan) return;
       const newName = draft.name.trim();
       if (!newName) {
-        new Notice("Gym: enter a name");
+        new Notice(t("Gym: enter a name"));
         return;
       }
       void this.act(async () => {
@@ -159,12 +161,12 @@ export class PlanBlock extends MarkdownRenderChild {
 
   private renderAdd(root: HTMLElement, db: LightDb, scheme: Scheme, form: NewExercise): void {
     const box = root.createDiv({ cls: "gym-plan-new" });
-    box.createDiv({ cls: "gym-plan-edit-name", text: `Add exercise to ${scheme.name}` });
+    box.createDiv({ cls: "gym-plan-edit-name", text: t("Add exercise to {group}", { group: scheme.name }) });
 
     const pickField = box.createEl("label", { cls: "gym-plan-field" });
-    pickField.createSpan({ text: "Exercise" });
+    pickField.createSpan({ text: t("Exercise") });
     const pick = pickField.createEl("select", { cls: "dropdown" });
-    pick.createEl("option", { text: "New exercise", value: "" });
+    pick.createEl("option", { text: t("New exercise"), value: "" });
     for (const file of this.notes.files()) {
       const id = this.notes.idOf(file);
       if (id && scheme.exercises.includes(id)) continue;
@@ -178,8 +180,8 @@ export class PlanBlock extends MarkdownRenderChild {
 
     if (!form.notePath) {
       const nameField = box.createEl("label", { cls: "gym-plan-field" });
-      nameField.createSpan({ text: "Name" });
-      const name = nameField.createEl("input", { type: "text", attr: { placeholder: "Pull-ups" } });
+      nameField.createSpan({ text: t("Name") });
+      const name = nameField.createEl("input", { type: "text", attr: { placeholder: t("Pull-ups") } });
       name.value = form.name;
       name.oninput = () => (form.name = name.value);
     }
@@ -187,16 +189,16 @@ export class PlanBlock extends MarkdownRenderChild {
 
     const actions = box.createDiv({ cls: "gym-plan-actions" });
     actions.createDiv({ cls: "gym-plan-spacer" });
-    actions.createEl("button", { text: "Cancel" }).onclick = () => {
+    actions.createEl("button", { text: t("Cancel") }).onclick = () => {
       this.adding = null;
       this.render();
     };
-    actions.createEl("button", { cls: "gym-primary", text: "Add" }).onclick = () => {
+    actions.createEl("button", { cls: "gym-primary", text: t("Add") }).onclick = () => {
       const plan = parsePlan(form);
       if (!plan) return;
       const name = form.name.trim();
       if (!form.notePath && !name) {
-        new Notice("Gym: enter a name");
+        new Notice(t("Gym: enter a name"));
         return;
       }
       void this.act(async () => {
@@ -204,7 +206,7 @@ export class PlanBlock extends MarkdownRenderChild {
         let title: string;
         if (form.notePath) {
           const file = this.app.vault.getAbstractFileByPath(form.notePath);
-          if (!(file instanceof TFile)) throw new Error(`${form.notePath} not found`);
+          if (!(file instanceof TFile)) throw new Error(t("{path} not found", { path: form.notePath }));
           id = await this.notes.ensureId(file);
           title = file.basename;
         } else {
@@ -231,8 +233,8 @@ export class PlanBlock extends MarkdownRenderChild {
       input.value = value;
       input.oninput = () => set(input.value);
     };
-    number("Sets", draft.sets, (v) => (draft.sets = v));
-    number("Reps", draft.reps, (v) => (draft.reps = v));
+    number(t("Sets"), draft.sets, (v) => (draft.sets = v));
+    number(t("Reps"), draft.reps, (v) => (draft.reps = v));
   }
 
   private async move(db: LightDb, scheme: Scheme, exerciseId: string, shift: number): Promise<void> {
@@ -282,7 +284,7 @@ function parsePlan(draft: { sets: string; reps: string }): { sets: number; reps:
   const sets = Number(draft.sets);
   const reps = Number(draft.reps);
   if (!Number.isInteger(sets) || sets < 1 || !Number.isInteger(reps) || reps < 1) {
-    new Notice("Gym: sets and reps must be whole numbers from 1");
+    new Notice(t("Gym: sets and reps must be whole numbers from 1"));
     return null;
   }
   return { sets, reps };

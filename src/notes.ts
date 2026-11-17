@@ -1,8 +1,8 @@
 import { App, normalizePath, TFile } from "obsidian";
+import { structureNames, t } from "./i18n";
 import { Exercise } from "./workout";
 
 export const GYM_ID = "gym-id";
-export const EXERCISES_FOLDER = "Exercises";
 
 const FORBIDDEN = /[\\/:*?"<>|#^[\]]/g;
 
@@ -16,7 +16,7 @@ export class ExerciseNotes {
 
   get folder(): string | null {
     const root = this.gymFolder().trim();
-    return root ? normalizePath(`${root}/${EXERCISES_FOLDER}`) : null;
+    return root ? normalizePath(`${root}/${structureNames().exercises}`) : null;
   }
 
   files(): TFile[] {
@@ -95,9 +95,9 @@ export class ExerciseNotes {
 
   async create(name: string): Promise<{ file: TFile; id: string }> {
     const folder = this.folder;
-    if (!folder) throw new Error("Set the Gym folder in settings first");
+    if (!folder) throw new Error(t("Set the Gym folder in settings first"));
     const path = this.pathFor(name);
-    if (this.app.vault.getAbstractFileByPath(path)) throw new Error(`${path} already exists`);
+    if (this.app.vault.getAbstractFileByPath(path)) throw new Error(t("{path} already exists", { path }));
     if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder);
     const id = await this.idForPath(path);
     const file = await this.app.vault.create(path, `---\n${GYM_ID}: ${id}\n---\n`);
@@ -108,7 +108,7 @@ export class ExerciseNotes {
   async rename(file: TFile, name: string): Promise<void> {
     const path = this.pathFor(name, file.parent?.path);
     if (path === file.path) return;
-    if (this.app.vault.getAbstractFileByPath(path)) throw new Error(`${path} already exists`);
+    if (this.app.vault.getAbstractFileByPath(path)) throw new Error(t("{path} already exists", { path }));
     await this.app.fileManager.renameFile(file, path);
   }
 
@@ -122,7 +122,7 @@ export class ExerciseNotes {
 
   private pathFor(name: string, folder = this.folder): string {
     const clean = name.replace(FORBIDDEN, " ").replace(/\s+/g, " ").trim();
-    if (!clean) throw new Error("Exercise name is empty");
+    if (!clean) throw new Error(t("Exercise name is empty"));
     return normalizePath(`${folder}/${clean}.md`);
   }
 }

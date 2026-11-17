@@ -1,4 +1,5 @@
 import { App, MarkdownRenderChild } from "obsidian";
+import { onLanguageChange, t } from "./i18n";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { ExerciseNotes } from "./notes";
@@ -33,6 +34,7 @@ export class GymBlock extends MarkdownRenderChild {
       this.db = db;
       this.register(db.onChange(() => this.render()));
       this.register(this.notes.onChange(() => this.render()));
+      this.register(onLanguageChange(() => this.render()));
       this.render();
     } catch (error) {
       this.message(error instanceof Error ? error.message : String(error));
@@ -70,7 +72,7 @@ export class GymBlock extends MarkdownRenderChild {
   }
 
   private renderIdle(root: HTMLElement): void {
-    const start = root.createEl("button", { cls: "gym-primary gym-big", text: "Start workout" });
+    const start = root.createEl("button", { cls: "gym-primary gym-big", text: t("Start workout") });
     start.onclick = () => {
       this.mode = { kind: "choose" };
       this.render();
@@ -78,7 +80,7 @@ export class GymBlock extends MarkdownRenderChild {
   }
 
   private renderChoose(root: HTMLElement): void {
-    root.createDiv({ cls: "gym-title", text: "What are we training?" });
+    root.createDiv({ cls: "gym-title", text: t("What are we training?") });
     const list = root.createDiv({ cls: "gym-schemes" });
     for (const scheme of this.schemes) {
       list.createEl("button", { cls: "gym-primary gym-big", text: scheme.name }).onclick = () => this.run(async (db) => {
@@ -90,7 +92,7 @@ export class GymBlock extends MarkdownRenderChild {
         });
       });
     }
-    root.createEl("button", { text: "Cancel" }).onclick = () => {
+    root.createEl("button", { text: t("Cancel") }).onclick = () => {
       this.mode = { kind: "idle" };
       this.render();
     };
@@ -113,8 +115,8 @@ export class GymBlock extends MarkdownRenderChild {
     const weight = this.weight;
 
     const header = root.createDiv({ cls: "gym-header" });
-    header.createSpan({ text: `${step.scheme.name} · exercise ${step.exerciseIndex + 1} of ${step.exerciseCount}` });
-    header.createSpan({ text: `started ${formatTime(startedAt)}` });
+    header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: step.scheme.name, n: step.exerciseIndex + 1, total: step.exerciseCount }) });
+    header.createSpan({ text: t("started {time}", { time: formatTime(startedAt) }) });
 
     const name = root.createDiv({ cls: "gym-exercise", text: step.exercise.name });
     const note = step.exercise.note;
@@ -129,7 +131,7 @@ export class GymBlock extends MarkdownRenderChild {
     const showWeight = () => {
       value.empty();
       value.createSpan({ cls: "gym-weight-number", text: formatKg(weight.grams) });
-      value.createSpan({ cls: "gym-weight-unit", text: "kg" });
+      value.createSpan({ cls: "gym-weight-unit", text: t("kg") });
     };
     showWeight();
     bindWeightDrag(value, weight, showWeight, {
@@ -150,7 +152,7 @@ export class GymBlock extends MarkdownRenderChild {
     const showReps = () => {
       repsValue.empty();
       repsValue.createSpan({ cls: "gym-reps-number", text: String(weight.reps) });
-      repsValue.createSpan({ cls: "gym-weight-unit", text: "reps" });
+      repsValue.createSpan({ cls: "gym-weight-unit", text: t("reps") });
       minus.disabled = weight.reps <= 1;
     };
     showReps();
@@ -163,7 +165,7 @@ export class GymBlock extends MarkdownRenderChild {
       showReps();
     };
 
-    const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: "Done" });
+    const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: t("Done") });
     const record = (toRecord: Step[], skipped: boolean) => this.run(async (db) => {
       const recorded = new Set(toRecord.map(stepKey));
       const finished = steps.every((s) => done.has(stepKey(s)) || recorded.has(stepKey(s)));
@@ -182,14 +184,14 @@ export class GymBlock extends MarkdownRenderChild {
     doneButton.onclick = () => record([step], false);
 
     const skips = root.createDiv({ cls: "gym-skips" });
-    skips.createEl("button", { text: "Skip set" }).onclick = () => record([step], true);
-    skips.createEl("button", { text: "Skip exercise" }).onclick = () => record(
+    skips.createEl("button", { text: t("Skip set") }).onclick = () => record([step], true);
+    skips.createEl("button", { text: t("Skip exercise") }).onclick = () => record(
       steps.filter((s) => s.exercise.id === step.exercise.id && !done.has(stepKey(s))),
       true,
     );
 
     const extra = root.createDiv({ cls: "gym-skips" });
-    const undo = extra.createEl("button", { text: "Undo last set" });
+    const undo = extra.createEl("button", { text: t("Undo last set") });
     const last = lastAction(db, workoutId);
     undo.disabled = !last;
     undo.onclick = () => {
@@ -206,7 +208,7 @@ export class GymBlock extends MarkdownRenderChild {
         };
       });
     };
-    extra.createEl("button", { text: "Change exercise" }).onclick = () => {
+    extra.createEl("button", { text: t("Change exercise") }).onclick = () => {
       this.switching = true;
       this.render();
     };
@@ -215,13 +217,13 @@ export class GymBlock extends MarkdownRenderChild {
     if (next) {
       root.createDiv({
         cls: "gym-next",
-        text: next.exercise.id === step.exercise.id ? `Next: set ${next.setNo}` : `Next: ${next.exercise.name}`,
+        text: next.exercise.id === step.exercise.id ? t("Next: set {n}", { n: next.setNo }) : t("Next: {name}", { name: next.exercise.name }),
       });
     }
 
-    const end = root.createEl("button", { cls: "gym-end", text: "End workout" });
+    const end = root.createEl("button", { cls: "gym-end", text: t("End workout") });
     end.onclick = () => {
-      if (!window.confirm("End the workout now?")) return;
+      if (!window.confirm(t("End the workout now?"))) return;
       void this.run(async (db) => {
         this.mode = { kind: "finished", workoutId };
         await db.put("workouts", workoutId, { finished_at: new Date().toISOString() });
@@ -230,7 +232,7 @@ export class GymBlock extends MarkdownRenderChild {
   }
 
   private renderSwitch(root: HTMLElement, steps: Step[], done: Set<string>, current: Step, workoutId: string): void {
-    root.createDiv({ cls: "gym-title", text: "Change exercise" });
+    root.createDiv({ cls: "gym-title", text: t("Change exercise") });
     const list = root.createDiv({ cls: "gym-switch-list" });
     const seen = new Set<string>();
     for (const step of steps) {
@@ -241,7 +243,7 @@ export class GymBlock extends MarkdownRenderChild {
       const item = list.createEl("button", { cls: "gym-switch-item" });
       if (step.exercise.id === current.exercise.id) item.addClass("is-current");
       item.createSpan({ text: step.exercise.name });
-      item.createSpan({ cls: "gym-switch-progress", text: finished === own.length ? "done" : `${finished}/${own.length}` });
+      item.createSpan({ cls: "gym-switch-progress", text: finished === own.length ? t("done") : `${finished}/${own.length}` });
       item.disabled = finished === own.length;
       item.onclick = () => {
         this.switching = false;
@@ -252,7 +254,7 @@ export class GymBlock extends MarkdownRenderChild {
         void this.run((db) => db.put("workouts", workoutId, { current_exercise: step.exercise.id }));
       };
     }
-    root.createEl("button", { text: "Back" }).onclick = () => {
+    root.createEl("button", { text: t("Back") }).onclick = () => {
       this.switching = false;
       this.render();
     };
@@ -260,10 +262,10 @@ export class GymBlock extends MarkdownRenderChild {
 
   private renderFinished(root: HTMLElement, db: LightDb, workoutId: string): void {
     const workout = getWorkout(db, workoutId);
-    root.createDiv({ cls: "gym-title", text: "Workout complete" });
+    root.createDiv({ cls: "gym-title", text: t("Workout complete") });
     if (workout?.finishedAt) {
       const minutes = Math.round((Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000);
-      root.createDiv({ cls: "gym-set", text: `${workSetCount(db, workoutId)} sets · ${minutes} min` });
+      root.createDiv({ cls: "gym-set", text: t("{sets} sets · {minutes} min", { sets: workSetCount(db, workoutId), minutes }) });
     }
     const ok = root.createEl("button", { cls: "gym-primary gym-big", text: "OK" });
     ok.onclick = () => {
@@ -288,8 +290,8 @@ export class GymBlock extends MarkdownRenderChild {
 }
 
 function setLabel(step: Step): string {
-  const reps = step.exercise.reps === null ? "" : ` · target ${step.exercise.reps} reps`;
-  return `Set ${step.setNo} of ${step.exercise.sets}${reps}`;
+  const reps = step.exercise.reps === null ? "" : t(" · target {reps} reps", { reps: step.exercise.reps });
+  return t("Set {n} of {total}", { n: step.setNo, total: step.exercise.sets }) + reps;
 }
 
 function formatTime(iso: string): string {

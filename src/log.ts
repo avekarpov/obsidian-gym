@@ -1,4 +1,5 @@
 import { App, MarkdownRenderChild, Notice } from "obsidian";
+import { onLanguageChange, t } from "./i18n";
 import { formatKg } from "./format";
 import { LightDb } from "./lightdb";
 import { ExerciseNotes } from "./notes";
@@ -29,6 +30,7 @@ export class LogBlock extends MarkdownRenderChild {
       const db = await openGymDb(this.app);
       this.register(db.onChange(() => this.render(db)));
       this.register(this.notes.onChange(() => this.render(db)));
+      this.register(onLanguageChange(() => this.render(db)));
       this.render(db);
     } catch (error) {
       this.error(error);
@@ -46,9 +48,9 @@ export class LogBlock extends MarkdownRenderChild {
       const exercises = loadExercises(db);
       this.notes.decorate(exercises);
       root.empty();
-      root.createEl("h2", { text: "Progress" });
+      root.createEl("h2", { text: t("Progress") });
       this.renderProgress(root, db, exercises);
-      root.createEl("h2", { text: "Workouts" });
+      root.createEl("h2", { text: t("Workouts") });
       this.renderWorkouts(root, db, exercises);
     } catch (error) {
       this.error(error);
@@ -64,12 +66,12 @@ export class LogBlock extends MarkdownRenderChild {
       points.set(r.exercise_id as string, list);
     }
     if (!points.size) {
-      root.createDiv({ cls: "gym-muted", text: "No workouts yet" });
+      root.createDiv({ cls: "gym-muted", text: t("No workouts yet") });
       return;
     }
     const groups = loadSchemes(db).map((s) => ({ name: s.name, ids: s.exercises }));
     const grouped = new Set(groups.flatMap((g) => g.ids));
-    groups.push({ name: "Other", ids: [...points.keys()].filter((id) => !grouped.has(id)) });
+    groups.push({ name: t("Other"), ids: [...points.keys()].filter((id) => !grouped.has(id)) });
 
     for (const group of groups) {
       const ids = group.ids.filter((id) => points.has(id) && exercises.has(id));
@@ -77,7 +79,7 @@ export class LogBlock extends MarkdownRenderChild {
       root.createEl("h3", { text: group.name });
       const table = horizontalScroll(root).createEl("table", { cls: "gym-progress" });
       const head = table.createEl("thead").createEl("tr");
-      for (const title of ["Exercise", "Trend", "Last", "Change"]) head.createEl("th", { text: title });
+      for (const title of ["Exercise", "Trend", "Last", "Change"]) head.createEl("th", { text: t(title) });
       const body = table.createEl("tbody");
       for (const id of ids) {
         const exercise = exercises.get(id)!;
@@ -87,7 +89,7 @@ export class LogBlock extends MarkdownRenderChild {
         const tr = body.createEl("tr");
         tr.createEl("td", { text: exercise.name });
         this.renderChart(tr.createEl("td", { cls: "gym-trend" }), series);
-        tr.createEl("td", { cls: "gym-num", text: `${formatKg(last)} kg` });
+        tr.createEl("td", { cls: "gym-num", text: t("{kg} kg", { kg: formatKg(last) }) });
         const diff = last - first;
         tr.createEl("td", {
           cls: `gym-num ${diff > 0 ? "gym-up" : diff < 0 ? "gym-down" : ""}`,
@@ -149,7 +151,7 @@ export class LogBlock extends MarkdownRenderChild {
     const schemeNames = new Map(loadSchemes(db).map((s) => [s.id, s.name]));
     const workouts = db.all("SELECT * FROM workouts ORDER BY started_at DESC");
     if (!workouts.length) {
-      root.createDiv({ cls: "gym-muted", text: "No workouts yet" });
+      root.createDiv({ cls: "gym-muted", text: t("No workouts yet") });
       return;
     }
     for (const w of workouts) {
@@ -163,19 +165,19 @@ export class LogBlock extends MarkdownRenderChild {
       const names = (w.schemes as string).split(",").filter(Boolean).map((s) => schemeNames.get(s) ?? s).join(", ");
       const finished = w.finished_at as string | null;
       const duration = finished
-        ? `${Math.round((Date.parse(finished) - Date.parse(w.started_at as string)) / 60000)} min`
-        : "in progress";
+        ? t("{minutes} min", { minutes: Math.round((Date.parse(finished) - Date.parse(w.started_at as string)) / 60000) })
+        : t("in progress");
       const title = `${formatDate(w.started_at as string)} · ${names} · ${duration}`;
       details.createEl("summary", { text: title });
-      const remove = details.createDiv({ cls: "gym-workout-actions" }).createEl("button", { cls: "mod-warning", text: "Delete workout" });
+      const remove = details.createDiv({ cls: "gym-workout-actions" }).createEl("button", { cls: "mod-warning", text: t("Delete workout") });
       remove.onclick = () => {
-        if (!window.confirm(`Delete workout ${title}? Its sets are deleted too.`)) return;
+        if (!window.confirm(t("Delete workout {title}? Its sets are deleted too.", { title }))) return;
         void this.deleteWorkout(db, id);
       };
 
       const sets = db.all("SELECT exercise_id, kind, weight_g, reps FROM sets WHERE workout_id = ? AND skipped = 0 ORDER BY done_at", [id]);
       if (!sets.length) {
-        details.createDiv({ cls: "gym-muted", text: "No sets" });
+        details.createDiv({ cls: "gym-muted", text: t("No sets") });
         continue;
       }
       const byExercise = new Map<string, { kind: string; grams: number; reps: number | null }[]>();
