@@ -52,6 +52,7 @@ const RU: Record<string, string> = {
   "{minutes} min": "{minutes} мин",
   "in progress": "идёт",
   "Delete workout": "Удалить тренировку",
+  "Delete": "Удалить",
   "Delete workout {title}? Its sets are deleted too.": "Удалить тренировку {title}? Её подходы тоже удалятся.",
   "No sets": "Нет подходов",
   "Sets": "Подходы",

@@ -170,7 +170,7 @@ export class LogBlock extends MarkdownRenderChild {
       const title = `${formatDate(w.started_at as string)} · ${names} · ${duration}`;
       const summary = details.createEl("summary");
       summary.createSpan({ cls: "gym-workout-title", text: title });
-      const remove = summary.createEl("button", { cls: "mod-warning", text: t("Delete workout") });
+      const remove = summary.createEl("button", { cls: "mod-warning", text: t("Delete") });
       remove.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
