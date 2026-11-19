@@ -1,4 +1,4 @@
-import { App, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, MarkdownView, normalizePath, Notice, OpenViewState, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { currentLanguage, Language, LANGUAGES, setLanguage, structureNames, StructureNames, t } from "./i18n";
 import { LogBlock } from "./log";
 import { ExerciseNotes } from "./notes";
@@ -66,6 +66,7 @@ export default class GymPlugin extends Plugin {
       }
     }));
 
+    this.forceReadingViewOnOpen();
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       if (file) void this.openInReadingView(file);
     }));
@@ -111,6 +112,21 @@ export default class GymPlugin extends Plugin {
     if (!root) return false;
     const names = structureNames();
     return NOTES.some(({ key }) => file.path === `${root}/${names[key]}`);
+  }
+
+  private forceReadingViewOnOpen(): void {
+    const proto = WorkspaceLeaf.prototype;
+    const original = proto.openFile;
+    const shouldForce = (file: TFile) => this.settings.readingView && this.isStructureNote(file);
+    proto.openFile = function (this: WorkspaceLeaf, file: TFile, openState?: OpenViewState): Promise<void> {
+      if (shouldForce(file)) {
+        openState = { ...openState, state: { ...(openState?.state ?? {}), mode: "preview" } };
+      }
+      return original.call(this, file, openState);
+    };
+    this.register(() => {
+      if (proto.openFile !== original) proto.openFile = original;
+    });
   }
 
   private async openInReadingView(file: TFile): Promise<void> {
