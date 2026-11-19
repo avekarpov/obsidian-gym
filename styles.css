@@ -318,7 +318,7 @@
   margin-bottom: var(--size-4-2);
 }
 
-.gym-plan .gym-plan-name {
+.gym-plan .gym-plan-field input.gym-plan-name {
   width: 100%;
   font-size: var(--font-ui-medium);
 }
