@@ -148,7 +148,7 @@ export class LogBlock extends MarkdownRenderChild {
   }
 
   private renderWorkouts(root: HTMLElement, db: LightDb, exercises: Map<string, Exercise>): void {
-    const schemeNames = new Map(loadSchemes(db).map((s) => [s.id, s.name]));
+    const schemeNames = new Map(loadSchemes(db, true).map((s) => [s.id, s.name]));
     const workouts = db.all("SELECT * FROM workouts ORDER BY started_at DESC");
     if (!workouts.length) {
       root.createDiv({ cls: "gym-muted", text: t("No workouts yet") });

@@ -58,6 +58,8 @@ const RU: Record<string, string> = {
   "Reps": "Повторы",
   "Add exercise": "Добавить упражнение",
   "Add workout": "Добавить тренировку",
+  "Gym: finish the workout in progress first": "Gym: сначала завершите начатую тренировку",
+  "Delete workout \"{name}\"? Exercises and past workouts are kept.": "Удалить тренировку «{name}»? Упражнения и прошлые тренировки сохранятся.",
   "Add exercise to {group}": "Добавить упражнение в «{group}»",
   "New exercise": "Новое упражнение",
   "Name": "Название",

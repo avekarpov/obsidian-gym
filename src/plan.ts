@@ -83,12 +83,28 @@ export class PlanBlock extends MarkdownRenderChild {
             };
             this.render();
           };
+          const remove = root.createEl("button", { cls: "gym-plan-add mod-warning", text: t("Delete workout") });
+          remove.onclick = () => this.deleteGroup(db, scheme);
         }
       }
       this.renderNewGroup(root, db);
     } catch (error) {
       this.error(error);
     }
+  }
+
+  private deleteGroup(db: LightDb, scheme: Scheme): void {
+    const inProgress = db.all("SELECT schemes FROM workouts WHERE finished_at IS NULL")
+      .some((w) => (w.schemes as string).split(",").includes(scheme.id));
+    if (inProgress) {
+      new Notice(t("Gym: finish the workout in progress first"));
+      return;
+    }
+    if (!window.confirm(t("Delete workout \"{name}\"? Exercises and past workouts are kept.", { name: scheme.name }))) return;
+    void this.act(async () => {
+      await db.put("schemes", scheme.id, { deleted: 1 });
+      if (this.draft?.schemeId === scheme.id) this.draft = null;
+    });
   }
 
   private renderNewGroup(root: HTMLElement, db: LightDb): void {

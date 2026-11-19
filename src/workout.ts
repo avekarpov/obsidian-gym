@@ -12,6 +12,7 @@ export interface Scheme {
   id: string;
   name: string;
   exercises: string[];
+  deleted: boolean;
 }
 
 export interface Step {
@@ -42,9 +43,10 @@ export function loadExercises(db: LightDb): Map<string, Exercise> {
   }]));
 }
 
-export function loadSchemes(db: LightDb): Scheme[] {
-  const schemes = db.all("SELECT id, name FROM schemes ORDER BY position, id")
-    .map((r) => ({ id: r.id as string, name: r.name as string, exercises: [] as string[] }));
+export function loadSchemes(db: LightDb, includeDeleted = false): Scheme[] {
+  const schemes = db.all("SELECT id, name, deleted FROM schemes ORDER BY position, id")
+    .map((r) => ({ id: r.id as string, name: r.name as string, exercises: [] as string[], deleted: r.deleted === 1 }))
+    .filter((s) => includeDeleted || !s.deleted);
   const byId = new Map(schemes.map((s) => [s.id, s]));
   for (const r of db.all("SELECT scheme_id, exercise_id FROM scheme_exercises ORDER BY position, id")) {
     byId.get(r.scheme_id as string)?.exercises.push(r.exercise_id as string);

@@ -19,7 +19,7 @@ export function buildExport(db: LightDb, notes: ExerciseNotes): string {
   const exercises = loadExercises(db);
   notes.decorate(exercises);
   const schemes = loadSchemes(db);
-  const schemeNames = new Map(schemes.map((s) => [s.id, s.name]));
+  const schemeNames = new Map(loadSchemes(db, true).map((s) => [s.id, s.name]));
   const kg = (grams: number | null) => (grams === null ? null : grams / 1000);
 
   const plan = schemes.map((scheme) => ({
