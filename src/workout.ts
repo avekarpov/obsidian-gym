@@ -148,8 +148,7 @@ export function startValues(db: LightDb, workoutId: string, exercise: Exercise):
     [workoutId, exercise.id],
   )[0];
   if (current) return { grams: current.weight_g as number, reps: (current.reps as number | null) ?? target };
-  const best = previousBest(db, exercise.id, workoutId);
-  return best ? { grams: best.grams, reps: best.reps ?? target } : { grams: 0, reps: target };
+  return { grams: previousBest(db, exercise.id, workoutId)?.grams ?? 0, reps: target };
 }
 
 export function workSetCount(db: LightDb, workoutId: string): number {
