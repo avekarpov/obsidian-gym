@@ -26,6 +26,7 @@ export class PlanBlock extends MarkdownRenderChild {
   private db: LightDb | null = null;
   private draft: Draft | null = null;
   private adding: NewExercise | null = null;
+  private newGroup: { name: string } | null = null;
   private saving = false;
 
   constructor(containerEl: HTMLElement, private app: App, private notes: ExerciseNotes) {
@@ -84,9 +85,47 @@ export class PlanBlock extends MarkdownRenderChild {
           };
         }
       }
+      this.renderNewGroup(root, db);
     } catch (error) {
       this.error(error);
     }
+  }
+
+  private renderNewGroup(root: HTMLElement, db: LightDb): void {
+    const form = this.newGroup;
+    if (!form) {
+      root.createEl("button", { cls: "gym-plan-add gym-plan-add-group", text: t("Add workout") }).onclick = () => {
+        this.newGroup = { name: "" };
+        this.render();
+      };
+      return;
+    }
+    const box = root.createDiv({ cls: "gym-plan-new" });
+    box.createDiv({ cls: "gym-plan-edit-name", text: t("Add workout") });
+    const field = box.createEl("label", { cls: "gym-plan-field" });
+    field.createSpan({ text: t("Name") });
+    const input = field.createEl("input", { type: "text" });
+    input.value = form.name;
+    input.oninput = () => (form.name = input.value);
+    const actions = box.createDiv({ cls: "gym-plan-actions" });
+    actions.createDiv({ cls: "gym-plan-spacer" });
+    actions.createEl("button", { text: t("Cancel") }).onclick = () => {
+      this.newGroup = null;
+      this.render();
+    };
+    actions.createEl("button", { cls: "gym-primary", text: t("Add") }).onclick = () => {
+      const name = form.name.trim();
+      if (!name) {
+        new Notice(t("Gym: enter a name"));
+        return;
+      }
+      void this.act(async () => {
+        const position = (db.all("SELECT coalesce(max(position), 0) AS p FROM schemes")[0].p as number) + 1;
+        await db.put("schemes", `grp_${crypto.randomUUID().slice(0, 8)}`, { name, position });
+        this.newGroup = null;
+      });
+    };
+    window.setTimeout(() => input.focus(), 0);
   }
 
   private renderRow(body: HTMLElement, scheme: Scheme, exercise: Exercise): void {

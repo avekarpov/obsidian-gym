@@ -82,7 +82,7 @@ export class GymBlock extends MarkdownRenderChild {
   private renderChoose(root: HTMLElement): void {
     root.createDiv({ cls: "gym-title", text: t("What are we training?") });
     const list = root.createDiv({ cls: "gym-schemes" });
-    for (const scheme of this.schemes) {
+    for (const scheme of this.schemes.filter((s) => s.exercises.length > 0)) {
       list.createEl("button", { cls: "gym-primary gym-big", text: scheme.name }).onclick = () => this.run(async (db) => {
         this.mode = { kind: "idle" };
         await db.put("workouts", crypto.randomUUID(), {

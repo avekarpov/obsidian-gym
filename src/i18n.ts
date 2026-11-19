@@ -57,6 +57,7 @@ const RU: Record<string, string> = {
   "Sets": "Подходы",
   "Reps": "Повторы",
   "Add exercise": "Добавить упражнение",
+  "Add workout": "Добавить тренировку",
   "Add exercise to {group}": "Добавить упражнение в «{group}»",
   "New exercise": "Новое упражнение",
   "Name": "Название",
