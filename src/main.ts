@@ -1,4 +1,4 @@
-import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from "obsidian";
 import { currentLanguage, Language, LANGUAGES, setLanguage, structureNames, StructureNames, t } from "./i18n";
 import { LogBlock } from "./log";
 import { ExerciseNotes } from "./notes";
@@ -9,9 +9,10 @@ import { GymBlock } from "./view";
 interface GymSettings {
   gymFolder: string;
   language: Language;
+  readingView: boolean;
 }
 
-const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", language: "en" };
+const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", language: "en", readingView: true };
 
 const NOTES: { key: Exclude<keyof StructureNames, "exercises">; block: string }[] = [
   { key: "workout", block: "gym" },
@@ -65,6 +66,10 @@ export default class GymPlugin extends Plugin {
       }
     }));
 
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      if (file) void this.openInReadingView(file);
+    }));
+
     this.app.workspace.onLayoutReady(async () => {
       await this.ensureStructure();
       this.notes.rebuild();
@@ -84,6 +89,7 @@ export default class GymPlugin extends Plugin {
     return {
       gymFolder: data?.gymFolder ?? DEFAULT_SETTINGS.gymFolder,
       language: data?.language && data.language in LANGUAGES ? data.language : DEFAULT_SETTINGS.language,
+      readingView: data?.readingView ?? DEFAULT_SETTINGS.readingView,
     };
   }
 
@@ -93,6 +99,26 @@ export default class GymPlugin extends Plugin {
     await this.ensureStructure();
     this.notes.rebuild();
     await this.store.load();
+  }
+
+  async setReadingView(enabled: boolean): Promise<void> {
+    this.settings.readingView = enabled;
+    await this.saveData(this.settings);
+  }
+
+  private isStructureNote(file: TFile): boolean {
+    const root = this.root;
+    if (!root) return false;
+    const names = structureNames();
+    return NOTES.some(({ key }) => file.path === `${root}/${names[key]}`);
+  }
+
+  private async openInReadingView(file: TFile): Promise<void> {
+    if (!this.settings.readingView || !this.isStructureNote(file)) return;
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || view.file !== file || view.getMode() === "preview") return;
+    const state = view.leaf.getViewState();
+    await view.leaf.setViewState({ ...state, state: { ...state.state, mode: "preview" } });
   }
 
   async setPluginLanguage(language: Language): Promise<void> {
@@ -185,5 +211,11 @@ class GymSettingTab extends PluginSettingTab {
         text.setPlaceholder("Gym").setValue(this.plugin.settings.gymFolder);
         text.inputEl.addEventListener("change", () => void this.plugin.setGymFolder(text.getValue()));
       });
+    new Setting(containerEl)
+      .setName(t("Open in reading view"))
+      .setDesc(t("Open {workout}, {plan} and {log} in reading view. You can still switch to editing.", { ...names }))
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.readingView).onChange((value) => void this.plugin.setReadingView(value)),
+      );
   }
 }

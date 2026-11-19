@@ -59,6 +59,8 @@ const RU: Record<string, string> = {
   "Reps": "Повторы",
   "Add exercise": "Добавить упражнение",
   "Add workout": "Добавить тренировку",
+  "Open in reading view": "Открывать в режиме чтения",
+  "Open {workout}, {plan} and {log} in reading view. You can still switch to editing.": "Открывать {workout}, {plan} и {log} в режиме чтения. Переключиться в редактирование по-прежнему можно.",
   "Invalid data: {error}": "Ошибка в данных: {error}",
   "Fix the JSON in {path} first: {error}": "Сначала исправьте JSON в {path}: {error}",
   "Gym: a workout with this name already exists": "Gym: тренировка с таким названием уже есть",
