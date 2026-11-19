@@ -431,13 +431,6 @@
   color: var(--interactive-accent);
 }
 
-.metadata-property[data-property-key^="gym-"] {
-  display: none;
-}
-
-.metadata-container:has(.metadata-property[data-property-key^="gym-"]):not(:has(.metadata-property:not([data-property-key^="gym-"]))) {
-  display: none;
-}
 
 .gym .gym-previous {
   margin-top: var(--size-4-2);

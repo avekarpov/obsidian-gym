@@ -1,75 +1,74 @@
-import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder } from "obsidian";
-import { LlmExporter } from "./export";
-import { lightDbApi } from "./lightdb";
-import { LogBlock } from "./log";
+import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from "obsidian";
 import { currentLanguage, Language, LANGUAGES, setLanguage, structureNames, StructureNames, t } from "./i18n";
+import { LogBlock } from "./log";
 import { ExerciseNotes } from "./notes";
 import { PlanBlock } from "./plan";
-import { openGymDb } from "./schema";
+import { GymStore, LOG_BLOCK, PLAN_BLOCK } from "./store";
 import { GymBlock } from "./view";
 
 interface GymSettings {
   gymFolder: string;
-  useLlm: boolean;
   language: Language;
 }
 
-const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", useLlm: false, language: "en" };
-const LLM_FOLDER = ".llm";
-const LIGHTDB_WAIT_MS = 1000;
-const LIGHTDB_WAIT_ATTEMPTS = 30;
+const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", language: "en" };
 
 const NOTES: { key: Exclude<keyof StructureNames, "exercises">; block: string }[] = [
   { key: "workout", block: "gym" },
-  { key: "plan", block: "gym-plan" },
-  { key: "log", block: "gym-log" },
+  { key: "plan", block: PLAN_BLOCK },
+  { key: "log", block: LOG_BLOCK },
 ];
 
 export default class GymPlugin extends Plugin {
   settings: GymSettings = { ...DEFAULT_SETTINGS };
-  exporter: LlmExporter | null = null;
   notes!: ExerciseNotes;
-  private exporterStart: Promise<LlmExporter | null> | null = null;
+  store!: GymStore;
 
   async onload(): Promise<void> {
     this.settings = await this.readSettings();
     setLanguage(this.settings.language);
     this.notes = new ExerciseNotes(this.app, () => this.settings.gymFolder);
+    this.store = new GymStore(this.app, () => this.root);
 
     this.registerMarkdownCodeBlockProcessor("gym", (_source, el, ctx) => {
-      ctx.addChild(new GymBlock(el, this.app, this.notes));
+      ctx.addChild(new GymBlock(el, this.app, this.store, this.notes));
     });
-    this.registerMarkdownCodeBlockProcessor("gym-plan", (_source, el, ctx) => {
-      ctx.addChild(new PlanBlock(el, this.app, this.notes));
+    this.registerMarkdownCodeBlockProcessor(PLAN_BLOCK, (_source, el, ctx) => {
+      ctx.addChild(new PlanBlock(el, this.app, this.store, this.notes));
     });
-    this.registerMarkdownCodeBlockProcessor("gym-log", (_source, el, ctx) => {
-      ctx.addChild(new LogBlock(el, this.app, this.notes));
+    this.registerMarkdownCodeBlockProcessor(LOG_BLOCK, (_source, el, ctx) => {
+      ctx.addChild(new LogBlock(el, this.app, this.store, this.notes));
     });
     this.addRibbonIcon("dumbbell", t("Gym: open workout"), () => void this.openWorkout());
     this.addCommand({ id: "open-workout", name: t("Open workout"), callback: () => void this.openWorkout() });
     this.addSettingTab(new GymSettingTab(this.app, this));
 
-    const refreshNotes = () => {
-      this.notes.rebuild();
-      void this.notes.assignMissingIds();
+    const reloadIfData = (file: TAbstractFile, oldPath?: string) => {
+      if (this.store.isDataFile(file) || (oldPath && this.store.isDataFile(oldPath))) void this.store.load();
     };
-    this.registerEvent(this.app.vault.on("create", refreshNotes));
-    this.registerEvent(this.app.vault.on("delete", refreshNotes));
-    this.registerEvent(this.app.vault.on("rename", refreshNotes));
-    this.registerEvent(this.app.vault.on("rename", (item, oldPath) => {
-      const folder = this.root;
-      if (!folder || !(item instanceof TFolder)) return;
-      if (oldPath === folder || folder.startsWith(`${oldPath}/`)) {
-        void this.setGymFolder(item.path + folder.slice(oldPath.length));
+    this.registerEvent(this.app.vault.on("modify", (file) => reloadIfData(file)));
+    this.registerEvent(this.app.vault.on("create", (file) => {
+      this.notes.rebuild();
+      reloadIfData(file);
+    }));
+    this.registerEvent(this.app.vault.on("delete", (file) => {
+      this.notes.rebuild();
+      reloadIfData(file);
+    }));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      this.notes.rebuild();
+      reloadIfData(file, oldPath);
+      this.followGymFolder(file, oldPath);
+      if (file instanceof TFile && this.notes.contains(file.path) && this.notes.contains(oldPath)) {
+        const oldName = oldPath.slice(oldPath.lastIndexOf("/") + 1).replace(/\.md$/, "");
+        void this.store.renameExercise(oldName, file.basename);
       }
     }));
-    this.registerEvent(this.app.metadataCache.on("changed", refreshNotes));
-    this.registerEvent(this.app.metadataCache.on("resolved", refreshNotes));
 
-    this.app.workspace.onLayoutReady(() => {
-      refreshNotes();
-      void this.ensureStructure();
-      void this.ensureExporter();
+    this.app.workspace.onLayoutReady(async () => {
+      await this.ensureStructure();
+      this.notes.rebuild();
+      await this.store.load();
     });
   }
 
@@ -77,26 +76,15 @@ export default class GymPlugin extends Plugin {
     this.settings = await this.readSettings();
     setLanguage(this.settings.language);
     this.notes.rebuild();
-    void this.notes.assignMissingIds();
-    this.exporter?.schedule();
-  }
-
-  onunload(): void {
-    this.exporter?.cancel();
+    await this.store.load();
   }
 
   async readSettings(): Promise<GymSettings> {
     const data = (await this.loadData()) as Partial<GymSettings> | null;
     return {
       gymFolder: data?.gymFolder ?? DEFAULT_SETTINGS.gymFolder,
-      useLlm: data?.useLlm ?? DEFAULT_SETTINGS.useLlm,
       language: data?.language && data.language in LANGUAGES ? data.language : DEFAULT_SETTINGS.language,
     };
-  }
-
-  private llmDir(settings: GymSettings): string {
-    const folder = settings.gymFolder.trim();
-    return settings.useLlm && folder ? normalizePath(`${folder}/${LLM_FOLDER}`) : "";
   }
 
   async setGymFolder(folder: string): Promise<void> {
@@ -104,8 +92,7 @@ export default class GymPlugin extends Plugin {
     await this.saveData(this.settings);
     await this.ensureStructure();
     this.notes.rebuild();
-    await this.notes.assignMissingIds();
-    await this.exporter?.run();
+    await this.store.load();
   }
 
   async setPluginLanguage(language: Language): Promise<void> {
@@ -114,20 +101,20 @@ export default class GymPlugin extends Plugin {
     setLanguage(language);
     await this.ensureStructure();
     this.notes.rebuild();
-    await this.notes.assignMissingIds();
-  }
-
-  async setUseLlm(enabled: boolean): Promise<void> {
-    this.settings.useLlm = enabled;
-    await this.saveData(this.settings);
-    const exporter = await this.ensureExporter();
-    if (exporter) await exporter.run();
-    else new Notice(t("Gym: LightDB is not available, LLM export is off"));
+    await this.store.load();
   }
 
   private get root(): string | null {
     const folder = this.settings.gymFolder.trim();
     return folder ? normalizePath(folder) : null;
+  }
+
+  private followGymFolder(item: TAbstractFile, oldPath: string): void {
+    const folder = this.root;
+    if (!folder || !(item instanceof TFolder)) return;
+    if (oldPath === folder || folder.startsWith(`${oldPath}/`)) {
+      void this.setGymFolder(item.path + folder.slice(oldPath.length));
+    }
   }
 
   private async ensureStructure(): Promise<void> {
@@ -153,37 +140,6 @@ export default class GymPlugin extends Plugin {
       }
     } catch (error) {
       new Notice(`Gym: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  private ensureExporter(): Promise<LlmExporter | null> {
-    if (this.exporter) return Promise.resolve(this.exporter);
-    this.exporterStart ??= this.startExporter().finally(() => (this.exporterStart = null));
-    return this.exporterStart;
-  }
-
-  private async startExporter(): Promise<LlmExporter | null> {
-    try {
-      for (let attempt = 0; !lightDbApi(this.app); attempt++) {
-        if (attempt >= LIGHTDB_WAIT_ATTEMPTS) throw new Error("LightDB plugin is not loaded");
-        await new Promise((resolve) => window.setTimeout(resolve, LIGHTDB_WAIT_MS));
-      }
-      const db = await openGymDb(this.app);
-      const exporter = new LlmExporter(
-        this.app.vault.adapter,
-        db,
-        this.notes,
-        async () => this.llmDir(await this.readSettings()),
-        this.llmDir(this.settings),
-      );
-      this.exporter = exporter;
-      this.register(db.onChange(() => exporter.schedule()));
-      this.register(this.notes.onChange(() => exporter.schedule()));
-      exporter.schedule();
-      return exporter;
-    } catch (error) {
-      console.error("gym: LLM export is unavailable", error);
-      return null;
     }
   }
 
@@ -224,16 +180,10 @@ class GymSettingTab extends PluginSettingTab {
     const names = structureNames();
     new Setting(containerEl)
       .setName(t("Gym folder"))
-      .setDesc(t("Folder with {workout}, {plan}, {log} and {exercises}/. Missing files are created. Every note in {exercises}/ is an exercise; do not edit its gym-id property.", { ...names }))
+      .setDesc(t("Folder with {workout}, {plan}, {log} and {exercises}/. Missing files are created. The plan and the log keep their data as text inside their blocks; every note in {exercises}/ is an exercise.", { ...names }))
       .addText((text) => {
         text.setPlaceholder("Gym").setValue(this.plugin.settings.gymFolder);
         text.inputEl.addEventListener("change", () => void this.plugin.setGymFolder(text.getValue()));
       });
-    new Setting(containerEl)
-      .setName(t("Use LLM"))
-      .setDesc(t("Keep a hidden {folder}/ folder in the Gym folder with the plan and all workouts as JSON and a README describing the format, for a chat bot. Turning it off deletes the folder. Synced to all devices.", { folder: LLM_FOLDER }))
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.useLlm).onChange((value) => void this.plugin.setUseLlm(value)),
-      );
   }
 }

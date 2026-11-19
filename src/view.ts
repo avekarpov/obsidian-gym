@@ -1,21 +1,15 @@
 import { App, MarkdownRenderChild } from "obsidian";
-import { onLanguageChange, t } from "./i18n";
 import { formatKg } from "./format";
-import { LightDb } from "./lightdb";
+import { onLanguageChange, t } from "./i18n";
+import { localStamp, minutesBetween, stampToDate, Workout } from "./model";
 import { ExerciseNotes } from "./notes";
 import { bindWeightDrag } from "./scale";
-import { openGymDb } from "./schema";
-import {
-  activeWorkout, buildSteps, doneKeys, Exercise, getWorkout,
-  lastAction, loadExercises, loadSchemes, pickStep, previousSets, Scheme, startValues, Step, stepKey, Workout, workSetCount,
-} from "./workout";
+import { GymStore } from "./store";
+import { buildSteps, doneSetCount, pickStep, previousSets, setsTaken, startValues, Step } from "./workout";
 
-type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
+type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; start: string };
 
 export class GymBlock extends MarkdownRenderChild {
-  private db: LightDb | null = null;
-  private exercises = new Map<string, Exercise>();
-  private schemes: Scheme[] = [];
   private mode: Mode = { kind: "idle" };
   private weight: { key: string; grams: number; reps: number } | null = null;
   private dragging = false;
@@ -23,22 +17,16 @@ export class GymBlock extends MarkdownRenderChild {
   private busy = false;
   private switching = false;
 
-  constructor(containerEl: HTMLElement, private app: App, private notes: ExerciseNotes) {
+  constructor(containerEl: HTMLElement, private app: App, private store: GymStore, private notes: ExerciseNotes) {
     super(containerEl);
   }
 
-  async onload(): Promise<void> {
+  onload(): void {
     this.containerEl.addClass("gym");
-    try {
-      const db = await openGymDb(this.app);
-      this.db = db;
-      this.register(db.onChange(() => this.render()));
-      this.register(this.notes.onChange(() => this.render()));
-      this.register(onLanguageChange(() => this.render()));
-      this.render();
-    } catch (error) {
-      this.message(error instanceof Error ? error.message : String(error));
-    }
+    this.register(this.store.onChange(() => this.render()));
+    this.register(this.notes.onChange(() => this.render()));
+    this.register(onLanguageChange(() => this.render()));
+    this.render();
   }
 
   private message(text: string): void {
@@ -47,33 +35,22 @@ export class GymBlock extends MarkdownRenderChild {
   }
 
   private render(): void {
-    const db = this.db;
-    if (!db) return;
     if (this.dragging) {
       this.renderPending = true;
       return;
     }
     const root = this.containerEl;
-    try {
-      this.exercises = loadExercises(db);
-      this.notes.decorate(this.exercises);
-      this.schemes = loadSchemes(db, true);
-    } catch (error) {
-      this.message(error instanceof Error ? error.message : String(error));
-      return;
-    }
     root.empty();
-    const active = activeWorkout(db);
-    if (active) return this.renderStep(root, db, active);
+    const active = this.store.activeWorkout();
+    if (active) return this.renderStep(root, active);
     this.switching = false;
-    if (this.mode.kind === "finished") return this.renderFinished(root, db, this.mode.workoutId);
+    if (this.mode.kind === "finished") return this.renderFinished(root, this.mode.start);
     if (this.mode.kind === "choose") return this.renderChoose(root);
     this.renderIdle(root);
   }
 
   private renderIdle(root: HTMLElement): void {
-    const start = root.createEl("button", { cls: "gym-primary gym-big", text: t("Start workout") });
-    start.onclick = () => {
+    root.createEl("button", { cls: "gym-primary gym-big", text: t("Start workout") }).onclick = () => {
       this.mode = { kind: "choose" };
       this.render();
     };
@@ -82,13 +59,11 @@ export class GymBlock extends MarkdownRenderChild {
   private renderChoose(root: HTMLElement): void {
     root.createDiv({ cls: "gym-title", text: t("What are we training?") });
     const list = root.createDiv({ cls: "gym-schemes" });
-    for (const scheme of this.schemes.filter((s) => !s.deleted && s.exercises.length > 0)) {
-      list.createEl("button", { cls: "gym-primary gym-big", text: scheme.name }).onclick = () => this.run(async (db) => {
+    for (const group of this.store.plan.filter((g) => g.items.length > 0)) {
+      list.createEl("button", { cls: "gym-primary gym-big", text: group.name }).onclick = () => this.run(async () => {
         this.mode = { kind: "idle" };
-        await db.put("workouts", crypto.randomUUID(), {
-          schemes: scheme.id,
-          started_at: new Date().toISOString(),
-          finished_at: null,
+        await this.store.updateDiary((diary) => {
+          diary.unshift({ start: localStamp(), group: group.name, end: null, current: null, records: [] });
         });
       });
     }
@@ -98,28 +73,30 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private renderStep(root: HTMLElement, db: LightDb, workout: Workout): void {
-    const { id: workoutId, startedAt } = workout;
-    const steps = buildSteps(this.exercises, this.schemes, workout.schemes);
-    const done = doneKeys(db, workoutId);
-    const step = pickStep(steps, done, workout.currentExercise);
+  private renderStep(root: HTMLElement, workout: Workout): void {
+    const group = this.store.plan.find((g) => g.name === workout.group);
+    const steps = buildSteps(group);
+    const step = pickStep(steps, workout);
     if (!step) {
-      void this.run((db) => db.put("workouts", workoutId, { finished_at: new Date().toISOString() }));
+      if (!group) {
+        this.message(t("Group \"{group}\" is not in the plan", { group: workout.group }));
+        this.renderEnd(root, workout);
+        return;
+      }
+      void this.finish(workout);
       return;
     }
-    if (this.switching) return this.renderSwitch(root, steps, done, step, workoutId);
-    const key = stepKey(step);
-    if (this.weight?.key !== key) {
-      this.weight = { key, ...startValues(db, workoutId, step.exercise) };
-    }
+    if (this.switching) return this.renderSwitch(root, steps, workout, step);
+    const key = `${workout.start}|${step.item.name}|${step.setNo}`;
+    if (this.weight?.key !== key) this.weight = { key, ...startValues(this.store.diary, workout, step.item) };
     const weight = this.weight;
 
     const header = root.createDiv({ cls: "gym-header" });
-    header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: step.scheme.name, n: step.exerciseIndex + 1, total: step.exerciseCount }) });
-    header.createSpan({ text: t("started {time}", { time: formatTime(startedAt) }) });
+    header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: workout.group, n: step.exerciseIndex + 1, total: step.exerciseCount }) });
+    header.createSpan({ text: t("started {time}", { time: workout.start.slice(11) }) });
 
-    const name = root.createDiv({ cls: "gym-exercise", text: step.exercise.name });
-    const note = step.exercise.note;
+    const name = root.createDiv({ cls: "gym-exercise", text: step.item.name });
+    const note = this.notes.pathOf(step.item.name);
     if (note) {
       name.addClass("gym-link");
       name.onclick = () => void this.app.workspace.openLinkText(note, "", false);
@@ -165,46 +142,49 @@ export class GymBlock extends MarkdownRenderChild {
       showReps();
     };
 
-    const doneButton = root.createEl("button", { cls: "gym-primary gym-big", text: t("Done") });
-    const record = (toRecord: Step[], skipped: boolean) => this.run(async (db) => {
-      const recorded = new Set(toRecord.map(stepKey));
-      const finished = steps.every((s) => done.has(stepKey(s)) || recorded.has(stepKey(s)));
-      const now = new Date().toISOString();
-      await db.transaction([
-        ...toRecord.map((s) => ({
-          op: "put" as const, table: "sets", row: crypto.randomUUID(), fields: {
-            workout_id: workoutId, exercise_id: s.exercise.id, set_no: s.setNo,
-            kind: "work", weight_g: weight.grams, reps: skipped ? null : weight.reps, done_at: now, skipped: skipped ? 1 : 0,
-          },
-        })),
-        ...(finished ? [{ op: "put" as const, table: "workouts", row: workoutId, fields: { finished_at: now } }] : []),
-      ]);
-      if (finished) this.mode = { kind: "finished", workoutId };
+    const exercise = step.item.name;
+    const left = step.item.sets - setsTaken(workout, exercise);
+    const record = (skipped: number) => this.run(async () => {
+      let finished = false;
+      await this.store.updateDiary((diary) => {
+        const target = diary.find((w) => w.start === workout.start && !w.end);
+        if (!target) return;
+        target.records.push(skipped
+          ? { exercise, weightKg: null, reps: null, skipped }
+          : { exercise, weightKg: weight.grams / 1000, reps: weight.reps, skipped: 0 });
+        if (!pickStep(steps, target, exercise)) {
+          target.end = localStamp();
+          target.current = null;
+          finished = true;
+        }
+      });
+      if (finished) this.mode = { kind: "finished", start: workout.start };
     });
-    doneButton.onclick = () => record([step], false);
 
+    root.createEl("button", { cls: "gym-primary gym-big", text: t("Done") }).onclick = () => record(0);
     const skips = root.createDiv({ cls: "gym-skips" });
-    skips.createEl("button", { text: t("Skip set") }).onclick = () => record([step], true);
-    skips.createEl("button", { text: t("Skip exercise") }).onclick = () => record(
-      steps.filter((s) => s.exercise.id === step.exercise.id && !done.has(stepKey(s))),
-      true,
-    );
+    skips.createEl("button", { text: t("Skip set") }).onclick = () => record(1);
+    skips.createEl("button", { text: t("Skip exercise") }).onclick = () => record(left);
 
     const extra = root.createDiv({ cls: "gym-skips" });
+    const last = workout.records.at(-1);
     const undo = extra.createEl("button", { text: t("Undo last set") });
-    const last = lastAction(db, workoutId);
     undo.disabled = !last;
     undo.onclick = () => {
       if (!last) return;
-      void this.run(async (db) => {
-        await db.transaction([
-          ...last.setIds.map((id) => ({ op: "delete" as const, table: "sets", row: id })),
-          { op: "put" as const, table: "workouts", row: workoutId, fields: { current_exercise: last.exerciseId } },
-        ]);
+      void this.run(async () => {
+        await this.store.updateDiary((diary) => {
+          const target = diary.find((w) => w.start === workout.start && !w.end);
+          if (!target) return;
+          target.records.pop();
+          target.current = last.exercise;
+        });
+        const item = group?.items.find((i) => i.name === last.exercise);
+        const setNo = setsTaken({ ...workout, records: workout.records.slice(0, -1) }, last.exercise) + 1;
         this.weight = {
-          key: `${last.exerciseId}:${last.setNo}`,
-          grams: last.grams,
-          reps: last.reps ?? this.exercises.get(last.exerciseId)?.reps ?? 10,
+          key: `${workout.start}|${last.exercise}|${setNo}`,
+          grams: last.skipped ? weight.grams : Math.round((last.weightKg ?? 0) * 1000),
+          reps: last.reps ?? item?.reps ?? weight.reps,
         };
       });
     };
@@ -213,47 +193,59 @@ export class GymBlock extends MarkdownRenderChild {
       this.render();
     };
 
-    const next = pickStep(steps, new Set([...done, key]), step.exercise.id);
+    const after = { ...workout, records: [...workout.records, { exercise, weightKg: 0, reps: 0, skipped: 0 }] };
+    const next = pickStep(steps, after, exercise);
     if (next) {
       root.createDiv({
         cls: "gym-next",
-        text: next.exercise.id === step.exercise.id ? t("Next: set {n}", { n: next.setNo }) : t("Next: {name}", { name: next.exercise.name }),
+        text: next.item.name === exercise ? t("Next: set {n}", { n: next.setNo }) : t("Next: {name}", { name: next.item.name }),
       });
     }
 
-    this.renderPrevious(root, db, workoutId, step);
+    this.renderPrevious(root, workout, exercise);
+    this.renderEnd(root, workout);
+  }
 
-    const end = root.createEl("button", { cls: "gym-end", text: t("End workout") });
-    end.onclick = () => {
+  private renderEnd(root: HTMLElement, workout: Workout): void {
+    root.createEl("button", { cls: "gym-end", text: t("End workout") }).onclick = () => {
       if (!window.confirm(t("End the workout now?"))) return;
-      void this.run(async (db) => {
-        this.mode = { kind: "finished", workoutId };
-        await db.put("workouts", workoutId, { finished_at: new Date().toISOString() });
-      });
+      void this.finish(workout);
     };
   }
 
-  private renderSwitch(root: HTMLElement, steps: Step[], done: Set<string>, current: Step, workoutId: string): void {
+  private async finish(workout: Workout): Promise<void> {
+    await this.run(async () => {
+      this.mode = { kind: "finished", start: workout.start };
+      await this.store.updateDiary((diary) => {
+        const target = diary.find((w) => w.start === workout.start && !w.end);
+        if (!target) return;
+        target.end = localStamp();
+        target.current = null;
+      });
+    });
+  }
+
+  private renderSwitch(root: HTMLElement, steps: Step[], workout: Workout, current: Step): void {
     root.createDiv({ cls: "gym-title", text: t("Change exercise") });
     const list = root.createDiv({ cls: "gym-switch-list" });
-    const seen = new Set<string>();
-    for (const step of steps) {
-      if (seen.has(step.exercise.id)) continue;
-      seen.add(step.exercise.id);
-      const own = steps.filter((s) => s.exercise.id === step.exercise.id);
-      const finished = own.filter((s) => done.has(stepKey(s))).length;
-      const item = list.createEl("button", { cls: "gym-switch-item" });
-      if (step.exercise.id === current.exercise.id) item.addClass("is-current");
-      item.createSpan({ text: step.exercise.name });
-      item.createSpan({ cls: "gym-switch-progress", text: finished === own.length ? t("done") : `${finished}/${own.length}` });
-      item.disabled = finished === own.length;
-      item.onclick = () => {
+    const items = [...new Map(steps.map((s) => [s.item.name, s.item])).values()];
+    for (const item of items) {
+      const taken = Math.min(setsTaken(workout, item.name), item.sets);
+      const button = list.createEl("button", { cls: "gym-switch-item" });
+      if (item.name === current.item.name) button.addClass("is-current");
+      button.createSpan({ text: item.name });
+      button.createSpan({ cls: "gym-switch-progress", text: taken === item.sets ? t("done") : `${taken}/${item.sets}` });
+      button.disabled = taken === item.sets;
+      button.onclick = () => {
         this.switching = false;
-        if (step.exercise.id === current.exercise.id) {
+        if (item.name === current.item.name) {
           this.render();
           return;
         }
-        void this.run((db) => db.put("workouts", workoutId, { current_exercise: step.exercise.id }));
+        void this.run(() => this.store.updateDiary((diary) => {
+          const target = diary.find((w) => w.start === workout.start && !w.end);
+          if (target) target.current = item.name;
+        }));
       };
     }
     root.createEl("button", { text: t("Back") }).onclick = () => {
@@ -262,50 +254,55 @@ export class GymBlock extends MarkdownRenderChild {
     };
   }
 
-  private renderPrevious(root: HTMLElement, db: LightDb, workoutId: string, step: Step): void {
+  private renderPrevious(root: HTMLElement, workout: Workout, exercise: string): void {
     const box = root.createDiv({ cls: "gym-previous" });
-    const previous = previousSets(db, step.exercise.id, workoutId);
+    const previous = previousSets(this.store.diary, exercise, workout);
     if (!previous) {
       box.createDiv({ cls: "gym-previous-title", text: t("No previous workouts with this exercise") });
       return;
     }
-    const day = new Date(previous.startedAt).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+    const day = stampToDate(previous.start).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
     box.createDiv({ cls: "gym-previous-title", text: t("Last time · {date}", { date: day }) });
     const table = box.createEl("table");
     const head = table.createEl("thead").createEl("tr");
     for (const title of ["#", t("kg"), t("reps")]) head.createEl("th", { text: title });
     const body = table.createEl("tbody");
-    previous.sets.forEach((set, i) => {
-      const tr = body.createEl("tr", { cls: set.skipped ? "gym-previous-skipped" : "" });
-      tr.createEl("td", { text: String(i + 1) });
-      if (set.skipped) {
-        tr.createEl("td", { text: t("skipped"), attr: { colspan: "2" } });
-        return;
+    let n = 0;
+    for (const record of previous.records) {
+      for (let i = 0; i < (record.skipped || 1); i++) {
+        n++;
+        const tr = body.createEl("tr", { cls: record.skipped ? "gym-previous-skipped" : "" });
+        tr.createEl("td", { text: String(n) });
+        if (record.skipped) {
+          tr.createEl("td", { text: t("skipped"), attr: { colspan: "2" } });
+          continue;
+        }
+        tr.createEl("td", { text: formatKg(Math.round((record.weightKg ?? 0) * 1000)) });
+        tr.createEl("td", { text: record.reps === null ? "—" : String(record.reps) });
       }
-      tr.createEl("td", { text: formatKg(set.grams) });
-      tr.createEl("td", { text: set.reps === null ? "—" : String(set.reps) });
-    });
+    }
   }
 
-  private renderFinished(root: HTMLElement, db: LightDb, workoutId: string): void {
-    const workout = getWorkout(db, workoutId);
+  private renderFinished(root: HTMLElement, start: string): void {
+    const workout = this.store.diary.find((w) => w.start === start);
     root.createDiv({ cls: "gym-title", text: t("Workout complete") });
-    if (workout?.finishedAt) {
-      const minutes = Math.round((Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000);
-      root.createDiv({ cls: "gym-set", text: t("{sets} sets · {minutes} min", { sets: workSetCount(db, workoutId), minutes }) });
+    if (workout?.end) {
+      root.createDiv({
+        cls: "gym-set",
+        text: t("{sets} sets · {minutes} min", { sets: doneSetCount(workout), minutes: minutesBetween(workout.start, workout.end) }),
+      });
     }
-    const ok = root.createEl("button", { cls: "gym-primary gym-big", text: "OK" });
-    ok.onclick = () => {
+    root.createEl("button", { cls: "gym-primary gym-big", text: "OK" }).onclick = () => {
       this.mode = { kind: "idle" };
       this.render();
     };
   }
 
-  private async run(action: (db: LightDb) => Promise<unknown>): Promise<void> {
-    if (!this.db || this.busy) return;
+  private async run(action: () => Promise<unknown>): Promise<void> {
+    if (this.busy) return;
     this.busy = true;
     try {
-      await action(this.db);
+      await action();
     } catch (error) {
       this.message(error instanceof Error ? error.message : String(error));
       return;
@@ -317,10 +314,5 @@ export class GymBlock extends MarkdownRenderChild {
 }
 
 function setLabel(step: Step): string {
-  const reps = step.exercise.reps === null ? "" : t(" · target {reps} reps", { reps: step.exercise.reps });
-  return t("Set {n} of {total}", { n: step.setNo, total: step.exercise.sets }) + reps;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return t("Set {n} of {total}", { n: step.setNo, total: step.item.sets }) + t(" · target {reps} reps", { reps: step.item.reps });
 }

@@ -59,6 +59,9 @@ const RU: Record<string, string> = {
   "Reps": "Повторы",
   "Add exercise": "Добавить упражнение",
   "Add workout": "Добавить тренировку",
+  "Line not understood: {line}": "Строка не распознана: {line}",
+  "Gym: a workout with this name already exists": "Gym: тренировка с таким названием уже есть",
+  "Group \"{group}\" is not in the plan": "Группы «{group}» нет в плане",
   "Gym: finish the workout in progress first": "Gym: сначала завершите начатую тренировку",
   "Delete workout \"{name}\"? Exercises and past workouts are kept.": "Удалить тренировку «{name}»? Упражнения и прошлые тренировки сохранятся.",
   "Add exercise to {group}": "Добавить упражнение в «{group}»",
@@ -76,15 +79,12 @@ const RU: Record<string, string> = {
   "Exercise name is empty": "Пустое название упражнения",
   "Set the Gym folder in settings first": "Сначала укажите папку Gym в настройках",
   "Gym: set the Gym folder in settings": "Gym: укажите папку Gym в настройках",
-  "Gym: LightDB is not available, LLM export is off": "Gym: LightDB недоступен, выгрузка для LLM выключена",
   "Open workout": "Открыть тренировку",
   "Gym: open workout": "Gym: открыть тренировку",
   "Language": "Язык",
   "Interface language and names of the files the plugin creates. Changing it renames them.": "Язык интерфейса и имён файлов, которые создаёт плагин. При смене файлы переименовываются.",
   "Gym folder": "Папка Gym",
-  "Folder with {workout}, {plan}, {log} and {exercises}/. Missing files are created. Every note in {exercises}/ is an exercise; do not edit its gym-id property.": "Папка с {workout}, {plan}, {log} и {exercises}/. Недостающие файлы создаются. Каждая заметка в {exercises}/ — упражнение; не меняйте её свойство gym-id.",
-  "Use LLM": "Использовать LLM",
-  "Keep a hidden {folder}/ folder in the Gym folder with the plan and all workouts as JSON and a README describing the format, for a chat bot. Turning it off deletes the folder. Synced to all devices.": "Хранить в папке Gym скрытую папку {folder}/ с планом и всеми тренировками в JSON и README с описанием формата для чат-бота. Выключение удаляет папку. Синхронизируется на все устройства.",
+  "Folder with {workout}, {plan}, {log} and {exercises}/. Missing files are created. The plan and the log keep their data as text inside their blocks; every note in {exercises}/ is an exercise.": "Папка с {workout}, {plan}, {log} и {exercises}/. Недостающие файлы создаются. План и дневник хранят данные текстом внутри своих блоков; каждая заметка в {exercises}/ — упражнение.",
 };
 
 let language: Language = "en";
