@@ -276,7 +276,8 @@
 }
 
 .gym-plan .gym-plan-add {
-  margin: var(--size-4-2) 0 var(--size-4-4);
+  display: block;
+  margin: var(--size-4-2) 0 0;
 }
 
 .gym-plan .gym-plan-new {
@@ -447,5 +448,5 @@
 }
 
 .gym-plan .gym-plan-add-group {
-  margin-top: var(--size-4-6);
+  margin-top: var(--size-4-2);
 }
