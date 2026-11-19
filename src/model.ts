@@ -63,10 +63,10 @@ export function parseDiary(text: string): Parsed<Workout[]> {
     if (!Array.isArray(data)) throw new Error("the log must be a JSON array of workouts");
     return data.map((workout, i) => {
       if (!isObject(workout) || !isStamp(workout.start) || typeof workout.group !== "string" || !Array.isArray(workout.sets)) {
-        throw new Error(`workout #${i + 1} must have "start", "group" and "sets"`);
+        throw new Error(`workout #${i + 1} must have "start" (UTC time like "2026-11-18T10:37Z"), "group" and "sets"`);
       }
       if (workout.end !== undefined && !isStamp(workout.end)) {
-        throw new Error(`workout #${i + 1}: "end" must be "YYYY-MM-DD HH:mm"`);
+        throw new Error(`workout #${i + 1}: "end" must be UTC time like "2026-11-18T10:37Z"`);
       }
       return {
         start: workout.start,
@@ -132,23 +132,23 @@ function isCount(value: unknown): value is number {
 }
 
 function isStamp(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value);
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(value);
 }
 
 export function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
 }
 
-export function localStamp(date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+export function utcStamp(date = new Date()): string {
+  return date.toISOString().slice(0, 16) + "Z";
 }
 
 export function stampToDate(stamp: string): Date {
-  const [day, time] = stamp.split(" ");
-  const [y, m, d] = day.split("-").map(Number);
-  const [hh, mm] = time.split(":").map(Number);
-  return new Date(y, m - 1, d, hh, mm);
+  return new Date(stamp);
+}
+
+export function localTime(stamp: string): string {
+  return stampToDate(stamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 export function minutesBetween(start: string, end: string): number {

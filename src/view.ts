@@ -1,7 +1,7 @@
 import { App, MarkdownRenderChild } from "obsidian";
 import { formatKg } from "./format";
 import { onLanguageChange, t } from "./i18n";
-import { localStamp, minutesBetween, stampToDate, Workout } from "./model";
+import { localTime, minutesBetween, stampToDate, utcStamp, Workout } from "./model";
 import { ExerciseNotes } from "./notes";
 import { bindWeightDrag } from "./scale";
 import { GymStore } from "./store";
@@ -63,7 +63,7 @@ export class GymBlock extends MarkdownRenderChild {
       list.createEl("button", { cls: "gym-primary gym-big", text: group.name }).onclick = () => this.run(async () => {
         this.mode = { kind: "idle" };
         await this.store.updateDiary((diary) => {
-          diary.unshift({ start: localStamp(), group: group.name, end: null, current: null, records: [] });
+          diary.unshift({ start: utcStamp(), group: group.name, end: null, current: null, records: [] });
         });
       });
     }
@@ -93,7 +93,7 @@ export class GymBlock extends MarkdownRenderChild {
 
     const header = root.createDiv({ cls: "gym-header" });
     header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: workout.group, n: step.exerciseIndex + 1, total: step.exerciseCount }) });
-    header.createSpan({ text: t("started {time}", { time: workout.start.slice(11) }) });
+    header.createSpan({ text: t("started {time}", { time: localTime(workout.start) }) });
 
     const name = root.createDiv({ cls: "gym-exercise", text: step.item.name });
     const note = this.notes.pathOf(step.item.name);
@@ -153,7 +153,7 @@ export class GymBlock extends MarkdownRenderChild {
           ? { exercise, weightKg: null, reps: null, skipped }
           : { exercise, weightKg: weight.grams / 1000, reps: weight.reps, skipped: 0 });
         if (!pickStep(steps, target, exercise)) {
-          target.end = localStamp();
+          target.end = utcStamp();
           target.current = null;
           finished = true;
         }
@@ -219,7 +219,7 @@ export class GymBlock extends MarkdownRenderChild {
       await this.store.updateDiary((diary) => {
         const target = diary.find((w) => w.start === workout.start && !w.end);
         if (!target) return;
-        target.end = localStamp();
+        target.end = utcStamp();
         target.current = null;
       });
     });
