@@ -29,100 +29,110 @@ export interface Parsed<T> {
   errors: string[];
 }
 
-const GROUP = /^##\s+(.+?)\s*$/;
-const PLAN_ITEM = /^-\s+(.+):\s*(\d+)\s*[×xх]\s*(\d+)\s*$/;
-const WORKOUT = /^##\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s+·\s+(.+?)\s*$/;
-const END = /^end:\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s*$/;
-const CURRENT = /^current:\s*(.+?)\s*$/;
-const RECORD = /^-\s+(.+):\s*(.+?)\s*$/;
-const DONE = /^(\d+(?:[.,]\d+)?)\s*[×xх]\s*(\d+|\?)$/;
-const SKIP = /^skip(?:\s*[×xх]\s*(\d+))?$/;
-
 export function parsePlan(text: string): Parsed<Group[]> {
-  const groups: Group[] = [];
-  const errors: string[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    const group = GROUP.exec(line);
-    if (group) {
-      groups.push({ name: group[1], items: [] });
-      continue;
-    }
-    const item = PLAN_ITEM.exec(line);
-    if (item && groups.length) {
-      groups[groups.length - 1].items.push({ name: item[1].trim(), sets: Number(item[2]), reps: Number(item[3]) });
-      continue;
-    }
-    errors.push(line);
-  }
-  return { value: groups, errors };
+  return parseJson(text, (data) => {
+    if (!Array.isArray(data)) throw new Error("the plan must be a JSON array of groups");
+    return data.map((group, i) => {
+      if (!isObject(group) || typeof group.group !== "string" || !Array.isArray(group.exercises)) {
+        throw new Error(`group #${i + 1} must have "group" and "exercises"`);
+      }
+      return {
+        name: group.group,
+        items: group.exercises.map((item, j) => {
+          if (!isObject(item) || typeof item.name !== "string" || !isCount(item.sets) || !isCount(item.reps)) {
+            throw new Error(`exercise #${j + 1} of "${group.group}" must have "name", "sets" and "reps"`);
+          }
+          return { name: item.name, sets: item.sets, reps: item.reps };
+        }),
+      };
+    });
+  });
 }
 
 export function serializePlan(groups: Group[]): string {
-  return groups
-    .map((group) => [`## ${group.name}`, ...group.items.map((item) => `- ${item.name}: ${item.sets} × ${item.reps}`)].join("\n"))
-    .join("\n\n");
+  if (!groups.length) return "[]";
+  const body = groups.map((group) => {
+    const items = group.items.map((item) => `    ${line({ name: item.name, sets: item.sets, reps: item.reps })}`);
+    return `  {"group": ${JSON.stringify(group.name)}, "exercises": [${wrap(items)}]}`;
+  });
+  return `[\n${body.join(",\n")}\n]`;
 }
 
 export function parseDiary(text: string): Parsed<Workout[]> {
-  const workouts: Workout[] = [];
-  const errors: string[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    const head = WORKOUT.exec(line);
-    if (head) {
-      workouts.push({ start: head[1], group: head[2], end: null, current: null, records: [] });
-      continue;
-    }
-    const workout = workouts[workouts.length - 1];
-    const end = END.exec(line);
-    if (workout && end) {
-      workout.end = end[1];
-      continue;
-    }
-    const current = CURRENT.exec(line);
-    if (workout && current) {
-      workout.current = current[1];
-      continue;
-    }
-    const record = RECORD.exec(line);
-    const parsed = record ? parseRecordValue(record[2]) : null;
-    if (workout && record && parsed) {
-      workout.records.push({ exercise: record[1].trim(), ...parsed });
-      continue;
-    }
-    errors.push(line);
-  }
-  return { value: workouts, errors };
-}
-
-function parseRecordValue(value: string): Omit<SetRecord, "exercise"> | null {
-  const done = DONE.exec(value);
-  if (done) {
-    return { weightKg: Number(done[1].replace(",", ".")), reps: done[2] === "?" ? null : Number(done[2]), skipped: 0 };
-  }
-  const skip = SKIP.exec(value);
-  if (skip) return { weightKg: null, reps: null, skipped: skip[1] ? Number(skip[1]) : 1 };
-  return null;
+  return parseJson(text, (data) => {
+    if (!Array.isArray(data)) throw new Error("the log must be a JSON array of workouts");
+    return data.map((workout, i) => {
+      if (!isObject(workout) || !isStamp(workout.start) || typeof workout.group !== "string" || !Array.isArray(workout.sets)) {
+        throw new Error(`workout #${i + 1} must have "start", "group" and "sets"`);
+      }
+      if (workout.end !== undefined && !isStamp(workout.end)) {
+        throw new Error(`workout #${i + 1}: "end" must be "YYYY-MM-DD HH:mm"`);
+      }
+      return {
+        start: workout.start,
+        end: (workout.end as string | undefined) ?? null,
+        group: workout.group,
+        current: typeof workout.current === "string" ? workout.current : null,
+        records: workout.sets.map((set, j) => {
+          if (!isObject(set) || typeof set.exercise !== "string") {
+            throw new Error(`set #${j + 1} of workout #${i + 1} must have "exercise"`);
+          }
+          if (set.skip !== undefined) {
+            if (!isCount(set.skip)) throw new Error(`set #${j + 1} of workout #${i + 1}: "skip" must be a whole number`);
+            return { exercise: set.exercise, weightKg: null, reps: null, skipped: set.skip };
+          }
+          if (typeof set.weight !== "number" || (set.reps !== null && !isCount(set.reps))) {
+            throw new Error(`set #${j + 1} of workout #${i + 1} must have "weight" and "reps"`);
+          }
+          return { exercise: set.exercise, weightKg: set.weight, reps: set.reps as number | null, skipped: 0 };
+        }),
+      };
+    });
+  });
 }
 
 export function serializeDiary(workouts: Workout[]): string {
-  return workouts
-    .map((workout) => {
-      const lines = [`## ${workout.start} · ${workout.group}`];
-      if (workout.end) lines.push(`end: ${workout.end}`);
-      if (workout.current) lines.push(`current: ${workout.current}`);
-      for (const record of workout.records) lines.push(`- ${record.exercise}: ${formatRecord(record)}`);
-      return lines.join("\n");
-    })
-    .join("\n\n");
+  if (!workouts.length) return "[]";
+  const body = workouts.map((workout) => {
+    const head: Record<string, unknown> = { start: workout.start };
+    if (workout.end) head.end = workout.end;
+    head.group = workout.group;
+    if (workout.current) head.current = workout.current;
+    const sets = workout.records.map((record) => `    ${line(record.skipped
+      ? { exercise: record.exercise, skip: record.skipped }
+      : { exercise: record.exercise, weight: record.weightKg, reps: record.reps })}`);
+    return `  ${line(head).slice(0, -1)}, "sets": [${wrap(sets)}]}`;
+  });
+  return `[\n${body.join(",\n")}\n]`;
 }
 
-function formatRecord(record: SetRecord): string {
-  if (record.skipped) return record.skipped > 1 ? `skip ×${record.skipped}` : "skip";
-  return `${formatNumber(record.weightKg ?? 0)}×${record.reps ?? "?"}`;
+function line(value: Record<string, unknown>): string {
+  return "{" + Object.entries(value).map(([key, v]) => `${JSON.stringify(key)}: ${JSON.stringify(v)}`).join(", ") + "}";
+}
+
+function wrap(lines: string[]): string {
+  return lines.length ? `\n${lines.join(",\n")}\n  ` : "";
+}
+
+function parseJson<T>(text: string, read: (data: unknown) => T[]): Parsed<T[]> {
+  if (!text.trim()) return { value: [], errors: [] };
+  try {
+    return { value: read(JSON.parse(text)), errors: [] };
+  } catch (error) {
+    return { value: [], errors: [error instanceof Error ? error.message : String(error)] };
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
+function isStamp(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value);
 }
 
 export function formatNumber(value: number): string {

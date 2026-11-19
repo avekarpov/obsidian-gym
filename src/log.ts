@@ -35,7 +35,7 @@ export class LogBlock extends MarkdownRenderChild {
     const root = this.containerEl;
     root.empty();
     for (const line of this.store.diaryErrors) {
-      root.createDiv({ cls: "gym-error", text: t("Line not understood: {line}", { line }) });
+      root.createDiv({ cls: "gym-error", text: t("Invalid data: {error}", { error: line }) });
     }
     root.createEl("h2", { text: t("Progress") });
     this.renderProgress(root);

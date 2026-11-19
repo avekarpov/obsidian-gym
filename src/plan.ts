@@ -43,7 +43,7 @@ export class PlanBlock extends MarkdownRenderChild {
     const root = this.containerEl;
     root.empty();
     for (const line of this.store.planErrors) {
-      root.createDiv({ cls: "gym-error", text: t("Line not understood: {line}", { line }) });
+      root.createDiv({ cls: "gym-error", text: t("Invalid data: {error}", { error: line }) });
     }
     for (const group of this.store.plan) {
       root.createEl("h2", { text: group.name });

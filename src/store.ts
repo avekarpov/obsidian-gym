@@ -1,5 +1,5 @@
 import { App, normalizePath, TAbstractFile, TFile } from "obsidian";
-import { structureNames } from "./i18n";
+import { structureNames, t } from "./i18n";
 import {
   findBlock, Group, parseDiary, parsePlan, replaceBlock, serializeDiary, serializePlan, Workout,
 } from "./model";
@@ -52,17 +52,19 @@ export class GymStore {
 
   async updatePlan(change: (plan: Group[]) => void): Promise<void> {
     await this.update(this.planPath, PLAN_BLOCK, (content) => {
-      const plan = parsePlan(content).value;
-      change(plan);
-      return serializePlan(plan);
+      const plan = parsePlan(content);
+      if (plan.errors.length) throw new Error(t("Fix the JSON in {path} first: {error}", { path: this.planPath ?? "", error: plan.errors[0] }));
+      change(plan.value);
+      return serializePlan(plan.value);
     });
   }
 
   async updateDiary(change: (diary: Workout[]) => void): Promise<void> {
     await this.update(this.diaryPath, LOG_BLOCK, (content) => {
-      const diary = parseDiary(content).value;
-      change(diary);
-      return serializeDiary(diary);
+      const diary = parseDiary(content);
+      if (diary.errors.length) throw new Error(t("Fix the JSON in {path} first: {error}", { path: this.diaryPath ?? "", error: diary.errors[0] }));
+      change(diary.value);
+      return serializeDiary(diary.value);
     });
   }
 
