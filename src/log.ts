@@ -168,9 +168,12 @@ export class LogBlock extends MarkdownRenderChild {
         ? t("{minutes} min", { minutes: Math.round((Date.parse(finished) - Date.parse(w.started_at as string)) / 60000) })
         : t("in progress");
       const title = `${formatDate(w.started_at as string)} · ${names} · ${duration}`;
-      details.createEl("summary", { text: title });
-      const remove = details.createDiv({ cls: "gym-workout-actions" }).createEl("button", { cls: "mod-warning", text: t("Delete workout") });
-      remove.onclick = () => {
+      const summary = details.createEl("summary");
+      summary.createSpan({ cls: "gym-workout-title", text: title });
+      const remove = summary.createEl("button", { cls: "mod-warning", text: t("Delete workout") });
+      remove.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         if (!window.confirm(t("Delete workout {title}? Its sets are deleted too.", { title }))) return;
         void this.deleteWorkout(db, id);
       };

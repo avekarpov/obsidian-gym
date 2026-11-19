@@ -181,8 +181,34 @@
 }
 
 .gym-log .gym-workout summary {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  list-style: none;
   cursor: pointer;
   font-weight: var(--font-semibold);
+}
+
+.gym-log .gym-workout summary::-webkit-details-marker {
+  display: none;
+}
+
+.gym-log .gym-workout summary::before {
+  content: "▶";
+  font-size: 0.75em;
+}
+
+.gym-log .gym-workout[open] summary::before {
+  content: "▼";
+}
+
+.gym-log .gym-workout-title {
+  flex: 1;
+}
+
+.gym-log .gym-workout summary button {
+  flex: none;
+  font-weight: normal;
 }
 
 .gym-log .gym-workout-sets {
@@ -340,11 +366,6 @@
   white-space: nowrap;
 }
 
-.gym-log .gym-workout-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--size-4-2);
-}
 
 .gym .gym-switch {
   height: 2.8em;
