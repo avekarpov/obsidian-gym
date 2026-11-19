@@ -141,6 +141,26 @@ export function previousBest(db: LightDb, exerciseId: string, excludeWorkout: st
   return row ? { grams: row.weight_g as number, reps: row.reps as number | null } : null;
 }
 
+export interface PreviousSets {
+  startedAt: string;
+  sets: { grams: number; reps: number | null; skipped: boolean }[];
+}
+
+export function previousSets(db: LightDb, exerciseId: string, excludeWorkout: string): PreviousSets | null {
+  const workout = db.all(
+    `SELECT w.id, w.started_at FROM workouts w
+     WHERE w.id != ? AND EXISTS (SELECT 1 FROM sets s WHERE s.workout_id = w.id AND s.exercise_id = ? AND s.skipped = 0)
+     ORDER BY w.started_at DESC LIMIT 1`,
+    [excludeWorkout, exerciseId],
+  )[0];
+  if (!workout) return null;
+  const sets = db.all(
+    "SELECT weight_g, reps, skipped FROM sets WHERE workout_id = ? AND exercise_id = ? ORDER BY done_at, set_no",
+    [workout.id as string, exerciseId],
+  ).map((r) => ({ grams: r.weight_g as number, reps: r.reps as number | null, skipped: r.skipped === 1 }));
+  return { startedAt: workout.started_at as string, sets };
+}
+
 export function startValues(db: LightDb, workoutId: string, exercise: Exercise): Start {
   const target = exercise.reps ?? 10;
   const current = db.all(

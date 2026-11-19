@@ -7,7 +7,7 @@ import { bindWeightDrag } from "./scale";
 import { openGymDb } from "./schema";
 import {
   activeWorkout, buildSteps, doneKeys, Exercise, getWorkout,
-  lastAction, loadExercises, loadSchemes, pickStep, Scheme, startValues, Step, stepKey, Workout, workSetCount,
+  lastAction, loadExercises, loadSchemes, pickStep, previousSets, Scheme, startValues, Step, stepKey, Workout, workSetCount,
 } from "./workout";
 
 type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; workoutId: string };
@@ -221,6 +221,8 @@ export class GymBlock extends MarkdownRenderChild {
       });
     }
 
+    this.renderPrevious(root, db, workoutId, step);
+
     const end = root.createEl("button", { cls: "gym-end", text: t("End workout") });
     end.onclick = () => {
       if (!window.confirm(t("End the workout now?"))) return;
@@ -258,6 +260,31 @@ export class GymBlock extends MarkdownRenderChild {
       this.switching = false;
       this.render();
     };
+  }
+
+  private renderPrevious(root: HTMLElement, db: LightDb, workoutId: string, step: Step): void {
+    const box = root.createDiv({ cls: "gym-previous" });
+    const previous = previousSets(db, step.exercise.id, workoutId);
+    if (!previous) {
+      box.createDiv({ cls: "gym-previous-title", text: t("No previous workouts with this exercise") });
+      return;
+    }
+    const day = new Date(previous.startedAt).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+    box.createDiv({ cls: "gym-previous-title", text: t("Last time · {date}", { date: day }) });
+    const table = box.createEl("table");
+    const head = table.createEl("thead").createEl("tr");
+    for (const title of ["#", t("kg"), t("reps")]) head.createEl("th", { text: title });
+    const body = table.createEl("tbody");
+    previous.sets.forEach((set, i) => {
+      const tr = body.createEl("tr", { cls: set.skipped ? "gym-previous-skipped" : "" });
+      tr.createEl("td", { text: String(i + 1) });
+      if (set.skipped) {
+        tr.createEl("td", { text: t("skipped"), attr: { colspan: "2" } });
+        return;
+      }
+      tr.createEl("td", { text: formatKg(set.grams) });
+      tr.createEl("td", { text: set.reps === null ? "—" : String(set.reps) });
+    });
   }
 
   private renderFinished(root: HTMLElement, db: LightDb, workoutId: string): void {

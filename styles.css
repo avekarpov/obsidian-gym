@@ -416,3 +416,32 @@
 .metadata-container:has(.metadata-property[data-property-key^="gym-"]):not(:has(.metadata-property:not([data-property-key^="gym-"]))) {
   display: none;
 }
+
+.gym .gym-previous {
+  margin-top: var(--size-4-2);
+  color: var(--text-muted);
+}
+
+.gym .gym-previous-title {
+  text-align: center;
+  font-size: var(--font-ui-small);
+  margin-bottom: var(--size-4-1);
+}
+
+.gym .gym-previous table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.gym .gym-previous th,
+.gym .gym-previous td {
+  text-align: center;
+  padding: var(--size-2-1) var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.gym .gym-previous-skipped td {
+  color: var(--text-faint);
+  font-style: italic;
+}
