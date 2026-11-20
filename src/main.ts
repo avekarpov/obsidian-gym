@@ -10,9 +10,10 @@ interface GymSettings {
   gymFolder: string;
   language: Language;
   readingView: boolean;
+  recentWorkouts: number;
 }
 
-const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", language: "en", readingView: true };
+const DEFAULT_SETTINGS: GymSettings = { gymFolder: "", language: "en", readingView: true, recentWorkouts: 4 };
 
 const NOTES: { key: Exclude<keyof StructureNames, "exercises">; block: string }[] = [
   { key: "workout", block: "gym" },
@@ -32,7 +33,7 @@ export default class GymPlugin extends Plugin {
     this.store = new GymStore(this.app, () => this.root);
 
     this.registerMarkdownCodeBlockProcessor("gym", (_source, el, ctx) => {
-      ctx.addChild(new GymBlock(el, this.app, this.store, this.notes));
+      ctx.addChild(new GymBlock(el, this.app, this.store, this.notes, () => this.settings.recentWorkouts));
     });
     this.registerMarkdownCodeBlockProcessor(PLAN_BLOCK, (_source, el, ctx) => {
       ctx.addChild(new PlanBlock(el, this.app, this.store, this.notes));
@@ -91,6 +92,9 @@ export default class GymPlugin extends Plugin {
       gymFolder: data?.gymFolder ?? DEFAULT_SETTINGS.gymFolder,
       language: data?.language && data.language in LANGUAGES ? data.language : DEFAULT_SETTINGS.language,
       readingView: data?.readingView ?? DEFAULT_SETTINGS.readingView,
+      recentWorkouts: Number.isInteger(data?.recentWorkouts) && (data?.recentWorkouts ?? -1) >= 0
+        ? (data?.recentWorkouts as number)
+        : DEFAULT_SETTINGS.recentWorkouts,
     };
   }
 
@@ -99,6 +103,12 @@ export default class GymPlugin extends Plugin {
     await this.saveData(this.settings);
     await this.ensureStructure();
     this.notes.rebuild();
+    await this.store.load();
+  }
+
+  async setRecentWorkouts(count: number): Promise<void> {
+    this.settings.recentWorkouts = count;
+    await this.saveData(this.settings);
     await this.store.load();
   }
 
@@ -233,5 +243,16 @@ class GymSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.readingView).onChange((value) => void this.plugin.setReadingView(value)),
       );
+    new Setting(containerEl)
+      .setName(t("Recent workouts"))
+      .setDesc(t("How many finished workouts to show on the workout choice screen. 0 hides the table."))
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "0";
+        text.setValue(String(this.plugin.settings.recentWorkouts)).onChange((value) => {
+          const count = Number(value);
+          if (Number.isInteger(count) && count >= 0) void this.plugin.setRecentWorkouts(count);
+        });
+      });
   }
 }

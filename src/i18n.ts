@@ -61,6 +61,7 @@ const RU: Record<string, string> = {
   "Add workout": "Добавить тренировку",
   "Comment": "Комментарий",
   "Recent workouts": "Последние тренировки",
+  "How many finished workouts to show on the workout choice screen. 0 hides the table.": "Сколько завершённых тренировок показывать на экране выбора тренировки. 0 — таблица скрыта.",
   "Date": "Дата",
   "Workout": "Тренировка",
   "Open in reading view": "Открывать в режиме чтения",

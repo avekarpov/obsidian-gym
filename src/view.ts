@@ -7,8 +7,6 @@ import { bindWeightDrag } from "./scale";
 import { GymStore } from "./store";
 import { buildSteps, doneSetCount, pickStep, previousSets, setsTaken, startValues, Step } from "./workout";
 
-const RECENT_WORKOUTS = 3;
-
 type Mode = { kind: "choose" } | { kind: "finished"; start: string };
 
 export class GymBlock extends MarkdownRenderChild {
@@ -20,7 +18,13 @@ export class GymBlock extends MarkdownRenderChild {
   private switching = false;
   private comment: { start: string; text: string } | null = null;
 
-  constructor(containerEl: HTMLElement, private app: App, private store: GymStore, private notes: ExerciseNotes) {
+  constructor(
+    containerEl: HTMLElement,
+    private app: App,
+    private store: GymStore,
+    private notes: ExerciseNotes,
+    private recentCount: () => number,
+  ) {
     super(containerEl);
   }
 
@@ -66,7 +70,9 @@ export class GymBlock extends MarkdownRenderChild {
   }
 
   private renderRecent(root: HTMLElement): void {
-    const recent = this.store.diary.filter((w) => w.end).slice(0, RECENT_WORKOUTS);
+    const count = this.recentCount();
+    if (count <= 0) return;
+    const recent = this.store.diary.filter((w) => w.end).slice(0, count);
     if (!recent.length) return;
     const box = root.createDiv({ cls: "gym-previous" });
     box.createDiv({ cls: "gym-previous-title", text: t("Recent workouts") });
