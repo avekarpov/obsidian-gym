@@ -165,6 +165,7 @@ export class LogBlock extends MarkdownRenderChild {
         void this.deleteWorkout(workout);
       };
 
+      if (workout.comment) details.createDiv({ cls: "gym-workout-comment", text: workout.comment });
       const done = workout.records.filter((record) => !record.skipped);
       if (!done.length) {
         details.createDiv({ cls: "gym-muted", text: t("No sets") });

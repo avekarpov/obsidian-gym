@@ -21,6 +21,7 @@ export interface Workout {
   group: string;
   end: string | null;
   current: string | null;
+  comment: string | null;
   records: SetRecord[];
 }
 
@@ -73,6 +74,7 @@ export function parseDiary(text: string): Parsed<Workout[]> {
         end: (workout.end as string | undefined) ?? null,
         group: workout.group,
         current: typeof workout.current === "string" ? workout.current : null,
+        comment: typeof workout.comment === "string" && workout.comment.trim() ? workout.comment : null,
         records: workout.sets.map((set, j) => {
           if (!isObject(set) || typeof set.exercise !== "string") {
             throw new Error(`set #${j + 1} of workout #${i + 1} must have "exercise"`);
@@ -98,6 +100,7 @@ export function serializeDiary(workouts: Workout[]): string {
     if (workout.end) head.end = workout.end;
     head.group = workout.group;
     if (workout.current) head.current = workout.current;
+    if (workout.comment) head.comment = workout.comment;
     const sets = workout.records.map((record) => `    ${line(record.skipped
       ? { exercise: record.exercise, skip: record.skipped }
       : { exercise: record.exercise, weight: record.weightKg, reps: record.reps })}`);

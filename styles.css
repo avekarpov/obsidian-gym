@@ -464,3 +464,16 @@
 .gym-plan .gym-plan-add-group {
   margin-top: var(--size-4-2);
 }
+
+.gym .gym-comment {
+  width: 100%;
+  resize: vertical;
+  font-size: var(--font-ui-medium);
+}
+
+.gym-log .gym-workout-comment {
+  margin-top: var(--size-4-2);
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-style: italic;
+}

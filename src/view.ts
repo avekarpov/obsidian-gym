@@ -16,6 +16,7 @@ export class GymBlock extends MarkdownRenderChild {
   private renderPending = false;
   private busy = false;
   private switching = false;
+  private comment: { start: string; text: string } | null = null;
 
   constructor(containerEl: HTMLElement, private app: App, private store: GymStore, private notes: ExerciseNotes) {
     super(containerEl);
@@ -63,7 +64,7 @@ export class GymBlock extends MarkdownRenderChild {
       list.createEl("button", { cls: "gym-primary gym-big", text: group.name }).onclick = () => this.run(async () => {
         this.mode = { kind: "idle" };
         await this.store.updateDiary((diary) => {
-          diary.unshift({ start: utcStamp(), group: group.name, end: null, current: null, records: [] });
+          diary.unshift({ start: utcStamp(), group: group.name, end: null, current: null, comment: null, records: [] });
         });
       });
     }
@@ -292,10 +293,22 @@ export class GymBlock extends MarkdownRenderChild {
         text: t("{sets} sets · {minutes} min", { sets: doneSetCount(workout), minutes: minutesBetween(workout.start, workout.end) }),
       });
     }
-    root.createEl("button", { cls: "gym-primary gym-big", text: "OK" }).onclick = () => {
+    if (this.comment?.start !== start) this.comment = { start, text: workout?.comment ?? "" };
+    const draft = this.comment;
+    const field = root.createEl("textarea", { cls: "gym-comment", attr: { rows: "3", placeholder: t("Comment on the workout") } });
+    field.value = draft.text;
+    field.oninput = () => (draft.text = field.value);
+    root.createEl("button", { cls: "gym-primary gym-big", text: "OK" }).onclick = () => this.run(async () => {
+      const text = draft.text.trim();
+      if (workout && text !== (workout.comment ?? "")) {
+        await this.store.updateDiary((diary) => {
+          const target = diary.find((w) => w.start === start);
+          if (target) target.comment = text || null;
+        });
+      }
+      this.comment = null;
       this.mode = { kind: "idle" };
-      this.render();
-    };
+    });
   }
 
   private async run(action: () => Promise<unknown>): Promise<void> {
