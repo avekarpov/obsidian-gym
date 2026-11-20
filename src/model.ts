@@ -1,3 +1,5 @@
+import { locale } from "./i18n";
+
 export interface PlanItem {
   name: string;
   sets: number;
@@ -151,7 +153,7 @@ export function stampToDate(stamp: string): Date {
 }
 
 export function localTime(stamp: string): string {
-  return stampToDate(stamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return stampToDate(stamp).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 export function minutesBetween(start: string, end: string): number {

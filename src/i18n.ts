@@ -105,6 +105,12 @@ export function currentLanguage(): Language {
   return language;
 }
 
+const LOCALES: Record<Language, string> = { en: "en-GB", ru: "ru-RU" };
+
+export function locale(): string {
+  return LOCALES[language];
+}
+
 export function onLanguageChange(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

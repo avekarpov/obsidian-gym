@@ -1,6 +1,6 @@
 import { App, MarkdownRenderChild, Notice } from "obsidian";
 import { formatKg } from "./format";
-import { onLanguageChange, t } from "./i18n";
+import { locale, onLanguageChange, t } from "./i18n";
 import { minutesBetween, stampToDate, Workout } from "./model";
 import { ExerciseNotes } from "./notes";
 import { horizontalScroll } from "./scroll";
@@ -193,5 +193,5 @@ export class LogBlock extends MarkdownRenderChild {
 }
 
 function formatDate(stamp: string): string {
-  return stampToDate(stamp).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+  return stampToDate(stamp).toLocaleDateString(locale(), { day: "2-digit", month: "2-digit" });
 }

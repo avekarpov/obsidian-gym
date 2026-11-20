@@ -1,6 +1,6 @@
 import { App, MarkdownRenderChild } from "obsidian";
 import { formatKg } from "./format";
-import { onLanguageChange, t } from "./i18n";
+import { locale, onLanguageChange, t } from "./i18n";
 import { localTime, minutesBetween, stampToDate, utcStamp, Workout } from "./model";
 import { ExerciseNotes } from "./notes";
 import { bindWeightDrag } from "./scale";
@@ -72,7 +72,7 @@ export class GymBlock extends MarkdownRenderChild {
     box.createDiv({ cls: "gym-previous-title", text: t("Recent workouts") });
     for (const workout of recent) {
       const row = box.createDiv({ cls: "gym-recent-row" });
-      row.createSpan({ cls: "gym-recent-date", text: stampToDate(workout.start).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", weekday: "short" }) });
+      row.createSpan({ cls: "gym-recent-date", text: stampToDate(workout.start).toLocaleDateString(locale(), { day: "2-digit", month: "2-digit", weekday: "short" }) });
       row.createSpan({ text: workout.group });
     }
   }
@@ -265,7 +265,7 @@ export class GymBlock extends MarkdownRenderChild {
       box.createDiv({ cls: "gym-previous-title", text: t("No previous workouts with this exercise") });
       return;
     }
-    const day = stampToDate(previous.start).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+    const day = stampToDate(previous.start).toLocaleDateString(locale(), { day: "2-digit", month: "2-digit" });
     box.createDiv({ cls: "gym-previous-title", text: t("Last time · {date}", { date: day }) });
     const table = box.createEl("table");
     const head = table.createEl("thead").createEl("tr");
