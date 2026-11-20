@@ -92,7 +92,7 @@ export class GymBlock extends MarkdownRenderChild {
     const weight = this.weight;
 
     const header = root.createDiv({ cls: "gym-header" });
-    header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: workout.group, n: step.exerciseIndex + 1, total: step.exerciseCount }) });
+    header.createSpan({ text: t("{group} · exercise {n} of {total}", { group: workout.group, n: exerciseOrdinal(workout, step.item.name), total: step.exerciseCount }) });
     header.createSpan({ text: t("started {time}", { time: localTime(workout.start) }) });
 
     const name = root.createDiv({ cls: "gym-exercise", text: step.item.name });
@@ -311,6 +311,12 @@ export class GymBlock extends MarkdownRenderChild {
     }
     this.render();
   }
+}
+
+function exerciseOrdinal(workout: Workout, exercise: string): number {
+  const started = [...new Set(workout.records.map((record) => record.exercise))];
+  const index = started.indexOf(exercise);
+  return index >= 0 ? index + 1 : started.length + 1;
 }
 
 function setLabel(step: Step): string {
