@@ -9,10 +9,10 @@ import { buildSteps, doneSetCount, pickStep, previousSets, setsTaken, startValue
 
 const RECENT_WORKOUTS = 3;
 
-type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; start: string };
+type Mode = { kind: "choose" } | { kind: "finished"; start: string };
 
 export class GymBlock extends MarkdownRenderChild {
-  private mode: Mode = { kind: "idle" };
+  private mode: Mode = { kind: "choose" };
   private weight: { key: string; grams: number; reps: number } | null = null;
   private dragging = false;
   private renderPending = false;
@@ -48,15 +48,7 @@ export class GymBlock extends MarkdownRenderChild {
     if (active) return this.renderStep(root, active);
     this.switching = false;
     if (this.mode.kind === "finished") return this.renderFinished(root, this.mode.start);
-    if (this.mode.kind === "choose") return this.renderChoose(root);
-    this.renderIdle(root);
-  }
-
-  private renderIdle(root: HTMLElement): void {
-    root.createEl("button", { cls: "gym-primary gym-big", text: t("Start workout") }).onclick = () => {
-      this.mode = { kind: "choose" };
-      this.render();
-    };
+    this.renderChoose(root);
   }
 
   private renderChoose(root: HTMLElement): void {
@@ -64,16 +56,12 @@ export class GymBlock extends MarkdownRenderChild {
     const list = root.createDiv({ cls: "gym-schemes" });
     for (const group of this.store.plan.filter((g) => g.items.length > 0)) {
       list.createEl("button", { cls: "gym-primary gym-big", text: group.name }).onclick = () => this.run(async () => {
-        this.mode = { kind: "idle" };
+        this.mode = { kind: "choose" };
         await this.store.updateDiary((diary) => {
           diary.unshift({ start: utcStamp(), group: group.name, end: null, current: null, comment: null, records: [] });
         });
       });
     }
-    root.createEl("button", { text: t("Cancel") }).onclick = () => {
-      this.mode = { kind: "idle" };
-      this.render();
-    };
     this.renderRecent(root);
   }
 
@@ -322,7 +310,7 @@ export class GymBlock extends MarkdownRenderChild {
         });
       }
       this.comment = null;
-      this.mode = { kind: "idle" };
+      this.mode = { kind: "choose" };
     });
   }
 
