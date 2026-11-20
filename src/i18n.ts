@@ -59,7 +59,7 @@ const RU: Record<string, string> = {
   "Reps": "Повторы",
   "Add exercise": "Добавить упражнение",
   "Add workout": "Добавить тренировку",
-  "Comment on the workout": "Комментарий к тренировке",
+  "Comment": "Комментарий",
   "Open in reading view": "Открывать в режиме чтения",
   "Open {workout}, {plan} and {log} in reading view. You can still switch to editing.": "Открывать {workout}, {plan} и {log} в режиме чтения. Переключиться в редактирование по-прежнему можно.",
   "Invalid data: {error}": "Ошибка в данных: {error}",

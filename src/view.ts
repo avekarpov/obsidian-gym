@@ -295,7 +295,7 @@ export class GymBlock extends MarkdownRenderChild {
     }
     if (this.comment?.start !== start) this.comment = { start, text: workout?.comment ?? "" };
     const draft = this.comment;
-    const field = root.createEl("textarea", { cls: "gym-comment", attr: { rows: "3", placeholder: t("Comment on the workout") } });
+    const field = root.createEl("textarea", { cls: "gym-comment", attr: { rows: "3", placeholder: t("Comment") } });
     field.value = draft.text;
     field.oninput = () => (draft.text = field.value);
     root.createEl("button", { cls: "gym-primary gym-big", text: "OK" }).onclick = () => this.run(async () => {
