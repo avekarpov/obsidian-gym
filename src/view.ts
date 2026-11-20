@@ -7,6 +7,8 @@ import { bindWeightDrag } from "./scale";
 import { GymStore } from "./store";
 import { buildSteps, doneSetCount, pickStep, previousSets, setsTaken, startValues, Step } from "./workout";
 
+const RECENT_WORKOUTS = 3;
+
 type Mode = { kind: "idle" } | { kind: "choose" } | { kind: "finished"; start: string };
 
 export class GymBlock extends MarkdownRenderChild {
@@ -72,6 +74,19 @@ export class GymBlock extends MarkdownRenderChild {
       this.mode = { kind: "idle" };
       this.render();
     };
+    this.renderRecent(root);
+  }
+
+  private renderRecent(root: HTMLElement): void {
+    const recent = this.store.diary.filter((w) => w.end).slice(0, RECENT_WORKOUTS);
+    if (!recent.length) return;
+    const box = root.createDiv({ cls: "gym-recent" });
+    box.createDiv({ cls: "gym-previous-title", text: t("Recent workouts") });
+    for (const workout of recent) {
+      const row = box.createDiv({ cls: "gym-recent-row" });
+      row.createSpan({ cls: "gym-recent-date", text: stampToDate(workout.start).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", weekday: "short" }) });
+      row.createSpan({ text: workout.group });
+    }
   }
 
   private renderStep(root: HTMLElement, workout: Workout): void {
