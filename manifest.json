@@ -3,7 +3,7 @@
   "name": "Gym",
   "version": "0.1.0",
   "minAppVersion": "1.8.7",
-  "description": "Workout tracker stored in LightDB.",
+  "description": "Workout tracker that keeps the plan and the log in your notes.",
   "author": "avekarpov",
   "isDesktopOnly": false
 }

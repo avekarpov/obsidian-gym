@@ -2,7 +2,7 @@
   "name": "gym",
   "version": "0.1.0",
   "private": true,
-  "description": "Workout tracker for Obsidian on top of LightDB",
+  "description": "Workout tracker for Obsidian that keeps the plan and the log in notes",
   "scripts": {
     "build": "tsc --noEmit && node esbuild.config.mjs",
     "dev": "node esbuild.config.mjs --watch",
