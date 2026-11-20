@@ -68,12 +68,16 @@ export class GymBlock extends MarkdownRenderChild {
   private renderRecent(root: HTMLElement): void {
     const recent = this.store.diary.filter((w) => w.end).slice(0, RECENT_WORKOUTS);
     if (!recent.length) return;
-    const box = root.createDiv({ cls: "gym-recent" });
+    const box = root.createDiv({ cls: "gym-previous" });
     box.createDiv({ cls: "gym-previous-title", text: t("Recent workouts") });
+    const table = box.createEl("table");
+    const head = table.createEl("thead").createEl("tr");
+    for (const title of [t("Date"), t("Workout")]) head.createEl("th", { text: title });
+    const body = table.createEl("tbody");
     for (const workout of recent) {
-      const row = box.createDiv({ cls: "gym-recent-row" });
-      row.createSpan({ cls: "gym-recent-date", text: stampToDate(workout.start).toLocaleDateString(locale(), { day: "2-digit", month: "2-digit", weekday: "short" }) });
-      row.createSpan({ text: workout.group });
+      const tr = body.createEl("tr");
+      tr.createEl("td", { text: stampToDate(workout.start).toLocaleDateString(locale(), { day: "2-digit", month: "2-digit", weekday: "short" }) });
+      tr.createEl("td", { text: workout.group });
     }
   }
 

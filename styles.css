@@ -122,17 +122,6 @@
   color: var(--text-error);
 }
 
-
-
-
-
-
-
-
-
-
-
-
 .gym-log .gym-num {
   text-align: right;
   white-space: nowrap;
@@ -366,7 +355,6 @@
   white-space: nowrap;
 }
 
-
 .gym .gym-switch {
   height: 2.8em;
 }
@@ -431,7 +419,6 @@
   color: var(--interactive-accent);
 }
 
-
 .gym .gym-previous {
   margin-top: var(--size-4-2);
   color: var(--text-muted);
@@ -478,19 +465,3 @@
   font-style: italic;
 }
 
-.gym .gym-recent {
-  margin-top: var(--size-4-4);
-  color: var(--text-muted);
-}
-
-.gym .gym-recent-row {
-  display: flex;
-  gap: var(--size-4-3);
-  padding: var(--size-2-2) 0;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.gym .gym-recent-date {
-  min-width: 6em;
-  font-variant-numeric: tabular-nums;
-}
